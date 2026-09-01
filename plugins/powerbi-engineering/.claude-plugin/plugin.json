@@ -1,0 +1,21 @@
+{
+  "name": "powerbi-engineering",
+  "version": "0.4.1",
+  "description": "Comprehensive Power BI solution auditing and maintainable SQL, Power Query, DAX, semantic-model, and PBIR engineering, plus the in-house report design blueprint. Performs detailed, correctness-first audits across sources, SQL, Power Query, semantic models, DAX, security, refresh, and PBIR reports; produces evidence-backed findings and exact optimization guidance, safely applies explicitly approved findings with validation and rollback, and builds or restyles report pages to the house visual system.",
+  "author": {
+    "name": "Local Power BI Engineering"
+  },
+  "keywords": [
+    "powerbi",
+    "pbip",
+    "pbir",
+    "tmdl",
+    "dax",
+    "power-query",
+    "sql",
+    "audit",
+    "optimization",
+    "report-design",
+    "theme"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "powerbi-ai-blueprint",
+  "interface": {
+    "displayName": "Powerbi Ai Blueprint"
+  },
+  "plugins": [
+    {
+      "name": "powerbi-engineering",
+      "source": {
+        "source": "local",
+        "path": "./plugins/powerbi-engineering"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

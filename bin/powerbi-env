@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+
+import { psqlUrlFromEnv, sourcesFromEnv, valueFromEnv } from "./powerbi-env-lib.mjs";
+
+function usage() {
+  console.error(`Usage:
+  powerbi-env validate <env-file>
+  powerbi-env sources <env-file>
+  powerbi-env count <env-file> <psql|mssql>
+  powerbi-env get <env-file> <variable>
+  powerbi-env psql-url <env-file> <connection-name>`);
+  process.exit(2);
+}
+
+const [command, file, argument] = process.argv.slice(2);
+if (!command || !file) usage();
+
+try {
+  const sources = sourcesFromEnv(file);
+  if (command === "validate") {
+    console.log(`Environment file is valid: ${sources.psql.length} PostgreSQL and ${sources.mssql.length} SQL Server connection(s).`);
+  } else if (command === "sources") {
+    process.stdout.write(JSON.stringify(sources));
+  } else if (command === "count") {
+    if (!["psql", "mssql"].includes(argument)) usage();
+    process.stdout.write(String(sources[argument].length));
+  } else if (command === "get") {
+    if (!argument || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(argument)) usage();
+    const value = valueFromEnv(file, argument);
+    if (value === undefined) process.exit(4);
+    process.stdout.write(value);
+  } else if (command === "psql-url") {
+    if (!argument) usage();
+    process.stdout.write(psqlUrlFromEnv(file, argument));
+  } else {
+    usage();
+  }
+} catch (error) {
+  console.error(error.message);
+  process.exit(3);
+}

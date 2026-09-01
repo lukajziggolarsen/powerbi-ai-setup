@@ -1,0 +1,29 @@
+{
+  "name": "powerbi-engineering",
+  "version": "0.4.1",
+  "description": "Comprehensive Power BI solution auditing and maintainable SQL, Power Query, DAX, semantic-model, and PBIR engineering, plus the in-house report design blueprint. Performs detailed, correctness-first audits across sources, SQL, Power Query, semantic models, DAX, security, refresh, and PBIR reports; produces evidence-backed findings and exact optimization guidance, safely applies explicitly approved findings with validation and rollback, and builds or restyles report pages to the house visual system.",
+  "author": {
+    "name": "Local Power BI Engineering"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Power BI Engineering",
+    "shortDescription": "Full Power BI auditing and engineering.",
+    "longDescription": "Performs detailed, correctness-first audits across sources, SQL, Power Query, semantic models, DAX, security, refresh, and PBIR reports. Produces evidence-backed findings and exact optimization guidance, and safely applies explicitly approved findings with validation and rollback. Audit and remediation skills are explicit-only: invoke them as $powerbi-solution-audit and $powerbi-remediate.",
+    "developerName": "Local Power BI Engineering",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Run a comprehensive end-to-end audit of this Power BI project.",
+      "Deeply review and optimize this project's SQL, Power Query, and DAX.",
+      "Trace report usage and dependencies before recommending cleanup.",
+      "Implement the approved audit roadmap as a readable, maintainable PBIP."
+    ]
+  },
+  "keywords": [
+    "report-design",
+    "theme"
+  ]
+}

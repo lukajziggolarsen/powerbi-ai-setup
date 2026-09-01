@@ -1,0 +1,6 @@
+interface:
+  display_name: "Power BI DAX Optimization"
+  short_description: "Make DAX correct, fast, and maintainable"
+  default_prompt: "Use $powerbi-dax-optimization to validate and optimize the DAX and semantic-model design in this Power BI project."
+policy:
+  allow_implicit_invocation: true

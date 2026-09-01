@@ -1,0 +1,8 @@
+interface:
+  display_name: "Power BI Solution Audit"
+  short_description: "Run a full end-to-end Power BI audit"
+  default_prompt: "Use $powerbi-solution-audit to perform a comprehensive, correctness-first audit of this Power BI solution."
+policy:
+  # Explicit-only: this is a heavyweight end-to-end audit workflow. It must not
+  # fire implicitly as a preamble to routine model/report edits.
+  allow_implicit_invocation: false

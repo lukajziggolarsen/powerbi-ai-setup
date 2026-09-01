@@ -1,0 +1,6 @@
+interface:
+  display_name: "Power BI SQL Optimization"
+  short_description: "Engineer fast, maintainable Power BI SQL"
+  default_prompt: "Use $powerbi-sql-optimization to review and optimize the SQL layer serving this Power BI project."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+set +x
+
+profile="${1:-}"
+if [[ ! "$profile" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
+  echo "Usage: powerbi-mssql-mcp <connection-name>" >&2
+  exit 2
+fi
+
+config_root="${XDG_CONFIG_HOME:-$HOME/.config}/powerbi-ai"
+env_file="${POWERBI_AI_ENV_FILE:-$config_root/connections.env}"
+env_reader="${POWERBI_AI_ENV_READER:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/powerbi-env}"
+toolbox_config="${POWERBI_MSSQL_TOOLBOX_CONFIG:-$config_root/mssql.tools.yaml}"
+if [[ ! -r "$env_file" ]]; then
+  echo "Missing environment file: $env_file" >&2
+  exit 3
+fi
+if [[ ! -x "$env_reader" ]]; then
+  echo "Missing environment reader: $env_reader" >&2
+  exit 3
+fi
+if [[ ! -r "$toolbox_config" ]]; then
+  echo "Missing Toolbox config: $toolbox_config" >&2
+  exit 3
+fi
+
+prefix="MSSQL_${profile^^}_"
+for mapping in HOST:HOST DATABASE:DATABASE SCHEMA:SCHEMA USER:USER PASSWORD:PASSWORD; do
+  IFS=: read -r field exported_name <<<"$mapping"
+  key="${prefix}${field}"
+  value=$("$env_reader" get "$env_file" "$key") || true
+  if [[ -z "$value" ]]; then
+    echo "Missing $key in $env_file" >&2
+    exit 4
+  fi
+  export "MSSQL_${exported_name}=$value"
+done
+MSSQL_PORT=$("$env_reader" get "$env_file" "${prefix}PORT") || MSSQL_PORT=1433
+MSSQL_ENCRYPT=$("$env_reader" get "$env_file" "${prefix}ENCRYPT") || MSSQL_ENCRYPT=true
+export MSSQL_PORT MSSQL_ENCRYPT
+
+version="${TOOLBOX_MCP_VERSION:-1.10.0}"
+exec npx -y "@toolbox-sdk/server@$version" --config "$toolbox_config" --stdio

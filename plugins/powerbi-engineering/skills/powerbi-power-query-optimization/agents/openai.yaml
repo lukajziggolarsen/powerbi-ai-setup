@@ -1,0 +1,6 @@
+interface:
+  display_name: "Power BI Power Query Optimization"
+  short_description: "Build correct, foldable, maintainable M"
+  default_prompt: "Use $powerbi-power-query-optimization to review and improve the Power Query layer in this Power BI project."
+policy:
+  allow_implicit_invocation: true

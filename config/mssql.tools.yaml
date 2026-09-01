@@ -1,0 +1,29 @@
+# All connection values are supplied by the launcher environment.
+# The database login must enforce read-only access.
+kind: source
+name: mssql-source
+type: mssql
+host: ${MSSQL_HOST}
+port: ${MSSQL_PORT:1433}
+database: ${MSSQL_DATABASE}
+user: ${MSSQL_USER}
+password: ${MSSQL_PASSWORD}
+encrypt: ${MSSQL_ENCRYPT:true}
+---
+kind: tool
+name: execute_sql
+type: mssql-execute-sql
+source: mssql-source
+description: "Execute SQL with the configured database login's permissions. Prefer schema ${MSSQL_SCHEMA:dbo} when an object name is not schema-qualified."
+---
+kind: tool
+name: list_tables
+type: mssql-list-tables
+source: mssql-source
+description: "List user tables and detailed schema metadata. The configured schema hint is ${MSSQL_SCHEMA:dbo}; this is not a security boundary."
+---
+kind: toolset
+name: data
+tools:
+  - execute_sql
+  - list_tables

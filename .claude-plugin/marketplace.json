@@ -1,0 +1,16 @@
+{
+  "name": "powerbi-ai-blueprint",
+  "owner": {
+    "name": "Power BI AI Blueprint"
+  },
+  "plugins": [
+    {
+      "name": "powerbi-engineering",
+      "source": "./plugins/powerbi-engineering",
+      "description": "Deep Power BI DAX, Power Query, SQL, audit, remediation, and Scapp report-design workflows.",
+      "version": "0.4.1",
+      "category": "development"
+    }
+  ]
+}
+

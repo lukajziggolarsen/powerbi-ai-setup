@@ -1,0 +1,8 @@
+interface:
+  display_name: "Power BI Remediation"
+  short_description: "Implement approved Power BI audit findings"
+  default_prompt: "Use $powerbi-remediate to implement the approved findings as a tested, readable, maintainable Power BI project."
+policy:
+  # Explicit-only: this skill can modify project files (Apply Mode). It must
+  # only run when the user invokes it by name with approved finding IDs.
+  allow_implicit_invocation: false
