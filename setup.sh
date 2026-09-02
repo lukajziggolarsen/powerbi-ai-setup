@@ -102,9 +102,13 @@ if [[ -n "$env_file" ]]; then
   psql_connections=$(node "$blueprint_root/bin/powerbi-env" count "$env_file" psql)
   if ((psql_connections > 0)) && ! has uvx && [[ ! -x "$HOME/.local/bin/uvx" ]]; then
     if has python3 && python3 -m pip --version >/dev/null 2>&1; then
-      run python3 -m pip install --user "uv==$UV_VERSION"
+      if [[ "$UV_VERSION" == "latest" ]]; then
+        run python3 -m pip install --user --upgrade uv
+      else
+        run python3 -m pip install --user "uv==$UV_VERSION"
+      fi
     else
-      echo "PostgreSQL MCP profiles require uvx; install uv $UV_VERSION and rerun." >&2
+      echo "PostgreSQL MCP profiles require uvx; install uv ($UV_VERSION channel) and rerun." >&2
       exit 3
     fi
   fi
@@ -133,6 +137,7 @@ done
 run install -m 0644 "$blueprint_root/bin/powerbi-env-lib.mjs" "$bin_dir/powerbi-env-lib.mjs"
 run install -m 0600 "$blueprint_root/config/mssql.tools.yaml" "$config_root/mssql.tools.yaml"
 run install -m 0600 "$blueprint_root/config/connections.env.example" "$config_root/connections.env.example"
+run install -m 0644 "$blueprint_root/versions.env" "$config_root/versions.env"
 if [[ -n "$env_file" ]]; then
   installed_env="$config_root/connections.env"
   if [[ "$env_file" == "$installed_env" ]]; then
@@ -217,7 +222,7 @@ if ((!skip_plugins)); then
     exit 5
   fi
   if installed_scope=$(claude_plugin_record powerbi-engineering@powerbi-ai-blueprint); then
-    run claude plugin update powerbi-engineering@powerbi-ai-blueprint --scope "$installed_scope" --yes
+    echo "note: kept personal Claude powerbi-engineering plugin unchanged ($installed_scope scope)."
   else
     run claude plugin install powerbi-engineering@powerbi-ai-blueprint --scope "$claude_scope" --yes
   fi

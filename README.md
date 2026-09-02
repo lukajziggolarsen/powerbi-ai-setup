@@ -21,9 +21,10 @@ by existing in this repository.
 | Source MCPs | optional project profiles | Read-only PostgreSQL or SQL Server evidence when a project needs it |
 | Agent policy | `AGENTS.md` and `CLAUDE.md` | The same routing, security, and definition-of-done contract for both agents |
 
-Power BI Desktop is the only mandatory GUI component. The Microsoft modeling
-MCP is still preview software, so versions are pinned in `versions.env` and
-upgrades should be deliberate.
+Power BI Desktop is the only mandatory GUI component. Online plugins, skills,
+CLIs, and MCP packages follow their upstream `latest` release by default. The
+personal `powerbi-engineering` plugin remains at its locally declared version
+and is never automatically upgraded from an online source.
 
 ## Fresh-machine setup
 
@@ -51,8 +52,8 @@ Run it for real:
 
 The installer:
 
-- installs missing Codex and Claude Code CLIs and the pinned Power BI CLIs;
-- registers Microsoft's Fabric marketplace and this local marketplace;
+- installs missing Codex and Claude Code CLIs and the latest Power BI CLIs;
+- refreshes Microsoft's Fabric marketplace and registers this local marketplace;
 - installs both plugins at project scope for Claude and enables them for the
   Codex project;
 - installs shared MCP launchers under `~/.local/bin`;
@@ -61,8 +62,10 @@ The installer:
   changing an existing config;
 - preserves pre-existing `AGENTS.md` and `CLAUDE.md` files.
 
-Use `--help` to see skip flags and alternative paths. Run the installer again
-after changing a pinned version; configuration writes are idempotent.
+Use `--help` to see skip flags and alternative paths. Rerun the installer to
+refresh online components to their latest releases; configuration writes are
+idempotent. `versions.env` can temporarily replace `latest` with an exact
+package version if an upstream compatibility regression must be isolated.
 
 ### Optional database MCPs
 
@@ -115,8 +118,8 @@ For SQL Server, Toolbox has no connection-level schema setting, so `SCHEMA` is
 supplied to the MCP as the preferred qualification hint; database permissions
 remain the actual security boundary.
 
-PostgreSQL connections require `uvx`. SQL Server connections use the pinned Toolbox
-package through `npx`. All database accounts must enforce read-only access at
+PostgreSQL connections require `uvx`. SQL Server connections use the latest
+Toolbox package through `npx`. All database accounts must enforce read-only access at
 the database; the MCP configuration cannot substitute for database grants.
 
 ## Migrating this machine

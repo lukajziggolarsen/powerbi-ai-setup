@@ -49,10 +49,12 @@ check_version() {
   local command_name=$1 expected=$2 actual
   if ! has "$command_name"; then fail "$command_name is missing (expected $expected)"; return; fi
   actual=$($command_name --version 2>/dev/null | head -n 1 | tr -d '\r')
-  if [[ "$actual" == "$expected" || "$actual" == *"$expected"* ]]; then
+  if [[ "$expected" == "latest" ]]; then
+    pass "$command_name version $actual (latest channel selected by setup)"
+  elif [[ "$actual" == "$expected" || "$actual" == *"$expected"* ]]; then
     pass "$command_name version $actual"
   else
-    warn "$command_name version $actual; blueprint validated $expected"
+    warn "$command_name version $actual; blueprint requests $expected"
   fi
 }
 

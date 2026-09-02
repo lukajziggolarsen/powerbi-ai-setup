@@ -9,6 +9,11 @@ if [[ ! "$profile" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
 fi
 
 config_root="${XDG_CONFIG_HOME:-$HOME/.config}/powerbi-ai"
+version_file="${POWERBI_AI_VERSIONS_FILE:-$config_root/versions.env}"
+if [[ -r "$version_file" ]]; then
+  # shellcheck disable=SC1090
+  source "$version_file"
+fi
 env_file="${POWERBI_AI_ENV_FILE:-$config_root/connections.env}"
 env_reader="${POWERBI_AI_ENV_READER:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/powerbi-env}"
 if [[ ! -r "$env_file" ]]; then
@@ -25,7 +30,11 @@ if ! database_uri=$("$env_reader" psql-url "$env_file" "$profile"); then
 fi
 
 export DATABASE_URI="$database_uri"
-version="${PSQL_MCP_VERSION:-0.3.0}"
+version="${PSQL_MCP_VERSION:-latest}"
+if [[ ! "$version" =~ ^[A-Za-z0-9._+-]+$ ]]; then
+  echo "Invalid PSQL_MCP_VERSION value" >&2
+  exit 2
+fi
 uvx_command=$(command -v uvx || true)
 if [[ -z "$uvx_command" && -x "$HOME/.local/bin/uvx" ]]; then
   uvx_command="$HOME/.local/bin/uvx"
@@ -33,6 +42,10 @@ fi
 if [[ -z "$uvx_command" ]]; then
   echo "uvx is required for PostgreSQL MCP connections" >&2
   exit 5
+fi
+if [[ "$version" == "latest" ]]; then
+  exec "$uvx_command" --upgrade-package postgres-mcp --from postgres-mcp \
+    --with 'mcp[cli]<2' postgres-mcp --access-mode=restricted
 fi
 exec "$uvx_command" --from "postgres-mcp==$version" --with 'mcp[cli]<2' \
   postgres-mcp --access-mode=restricted

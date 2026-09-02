@@ -2,7 +2,16 @@
 set -Eeuo pipefail
 set +x
 
-package="${POWERBI_MODELING_MCP_PACKAGE:-@microsoft/powerbi-modeling-mcp@0.5.0-beta.12}"
+config_root="${XDG_CONFIG_HOME:-$HOME/.config}/powerbi-ai"
+version_file="${POWERBI_AI_VERSIONS_FILE:-$config_root/versions.env}"
+if [[ -r "$version_file" ]]; then
+  # This file is installed from the trusted blueprint and contains assignments only.
+  # shellcheck disable=SC1090
+  source "$version_file"
+fi
+
+version="${POWERBI_MODELING_MCP_VERSION:-latest}"
+package="${POWERBI_MODELING_MCP_PACKAGE:-@microsoft/powerbi-modeling-mcp@$version}"
 if [[ ! "$package" =~ ^[A-Za-z0-9@._/-]+$ ]]; then
   echo "Invalid POWERBI_MODELING_MCP_PACKAGE value" >&2
   exit 2
@@ -21,4 +30,3 @@ if command -v powershell.exe >/dev/null 2>&1; then
 fi
 
 exec npx -y "$package" --start --readwrite
-

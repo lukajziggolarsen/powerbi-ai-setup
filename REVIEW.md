@@ -24,8 +24,8 @@ scope, duplicated database tool definitions, caches, and all inline secrets.
 |---|---:|---|---|
 | Codex CLI | 0.152.0 | Keep | Primary agent runtime |
 | Claude Code | 2.1.247 | Keep | Second supported agent runtime |
-| `powerbi-report-author` | 0.1.4 | Keep, pinned | Core deterministic PBIR editing/validation |
-| `powerbi-desktop` | 0.1.2 | Keep, pinned | Core Desktop open/reload/screenshot loop |
+| `powerbi-report-author` | 0.1.4 at inventory | Keep, latest channel | Core deterministic PBIR editing/validation |
+| `powerbi-desktop` | 0.1.2 at inventory | Keep, latest channel | Core Desktop open/reload/screenshot loop |
 | Codex `powerbi-authoring` | 0.3.14 | Keep | Best general Microsoft skill bundle |
 | Claude `powerbi-authoring` | 0.3.9 | Update and project-scope | Older than the Codex install; user scope adds unrelated context |
 | Local `powerbi-engineering` | 0.4.0 | Keep as 0.4.1, project-scope | Valuable specialist workflows; triggers needed deconfliction |
@@ -81,7 +81,7 @@ because it makes a shared plugin invalid in Codex.
 The installed standalone and bundled Microsoft modeling servers expose the same
 21 tools. Carrying both adds tool-selection ambiguity, startup cost, and a
 serious WSL topology trap: a Linux process cannot see Desktop's Windows-local
-Analysis Services process. The retained launcher starts the pinned MCP through
+Analysis Services process. The retained launcher starts the latest MCP through
 Windows `npx.cmd` when running in WSL and can also open WSL PBIP folders through
 their UNC path.
 
@@ -128,10 +128,11 @@ tokens of always-on skill descriptions per session during this review (about
 cost from unrelated repositories. Narrow descriptions also reduce false skill
 activation without losing capability.
 
-Package versions are centralized in `versions.env`. `doctor.sh` reports drift,
-missing launchers, plugin state, duplicate-routing policy, unsafe secret
-literals, and optional Desktop connectivity. Preview components should be
-tested before changing pins.
+The update policy is centralized in `versions.env`: upstream packages use the
+`latest` channel, while the personal plugin retains its local manifest version.
+`doctor.sh` reports missing launchers, plugin state, duplicate-routing policy,
+unsafe secret literals, and optional Desktop connectivity. Exact upstream
+versions remain available as temporary compatibility overrides.
 
 ## Upstream facts used for the decision
 
