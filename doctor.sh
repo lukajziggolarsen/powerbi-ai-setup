@@ -108,16 +108,19 @@ if has codex; then
 fi
 
 if has claude; then
-  claude_json=$(claude plugin list --json 2>/dev/null || true)
+  # Claude resolves project-scoped plugin state from the working directory, so
+  # the check has to run inside the workspace rather than wherever doctor.sh
+  # happens to be invoked from.
+  claude_json=$( (cd "$workspace" 2>/dev/null && claude plugin list --json 2>/dev/null) || true)
   if node -e 'const x=JSON.parse(process.argv[1]);process.exit(x.some(p=>p.id.startsWith("powerbi-authoring@")&&p.enabled)?0:1)' "$claude_json" 2>/dev/null; then
     pass "Claude powerbi-authoring plugin enabled"
   else
-    fail "Claude powerbi-authoring plugin is not enabled"
+    fail "Claude powerbi-authoring plugin is not enabled for $workspace"
   fi
   if node -e 'const x=JSON.parse(process.argv[1]);process.exit(x.some(p=>p.id.startsWith("powerbi-engineering@")&&p.enabled)?0:1)' "$claude_json" 2>/dev/null; then
     pass "Claude powerbi-engineering plugin enabled"
   else
-    warn "Claude powerbi-engineering plugin is not enabled"
+    warn "Claude powerbi-engineering plugin is not enabled for $workspace"
   fi
 fi
 
@@ -173,6 +176,23 @@ if ((live)); then
     pass "Power BI Desktop bridge responded"
   else
     warn "Power BI Desktop bridge did not respond; open Desktop and enable the bridge preview"
+  fi
+
+  if [[ -r "$claude_mcp" ]]; then
+    while IFS=$'\t' read -r server launcher profile; do
+      [[ -n "$server" ]] || continue
+      if probe_error=$(node "$blueprint_root/scripts/mcp-probe.mjs" "$launcher" "$profile" 2>&1 >/dev/null); then
+        pass "database MCP $server completed the initialize handshake"
+      else
+        fail "database MCP $server did not start: ${probe_error:0:400}"
+      fi
+    done < <(node -e '
+      const servers = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).mcpServers || {};
+      for (const [name, server] of Object.entries(servers)) {
+        const command = typeof server.command === "string" ? server.command : "";
+        if (!/powerbi-(psql|mssql)-mcp$/.test(command)) continue;
+        process.stdout.write(`${name}\t${command}\t${(server.args || [])[0] || ""}\n`);
+      }' "$claude_mcp")
   fi
 fi
 

@@ -116,8 +116,11 @@ function inspect(values) {
     validatePort(values, "mssql", profile, "1433");
     validateSchema(values, "mssql", profile);
     const encryptKey = profileKey("mssql", profile, "ENCRYPT");
-    if (values[encryptKey] && !["true", "false"].includes(values[encryptKey].toLowerCase())) {
-      throw new Error(`${encryptKey} must be true or false`);
+    // go-mssqldb (used by MCP Toolbox) accepts four modes. "false" still
+    // negotiates TLS for the login packet, so legacy servers without a usable
+    // certificate need "disable", which skips the handshake entirely.
+    if (values[encryptKey] && !["true", "false", "disable", "strict"].includes(values[encryptKey].toLowerCase())) {
+      throw new Error(`${encryptKey} must be true, false, disable, or strict`);
     }
   }
   const sources = {

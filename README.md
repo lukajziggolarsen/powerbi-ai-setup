@@ -55,7 +55,9 @@ The installer:
 - installs missing Codex and Claude Code CLIs and the latest Power BI CLIs;
 - refreshes Microsoft's Fabric marketplace and registers this local marketplace;
 - installs both plugins at project scope for Claude and enables them for the
-  Codex project;
+  Codex project. Claude resolves project scope from the working directory, so
+  the installer runs every `claude plugin` command inside `--workspace`; run
+  `doctor.sh` with the same `--workspace` or the plugins read as not enabled;
 - installs shared MCP launchers under `~/.local/bin`;
 - writes minimal project configs, disabling the bundled duplicate modeling MCP;
 - creates backups under `~/.local/state/powerbi-ai-blueprint/backups` before
@@ -107,8 +109,12 @@ servers. PostgreSQL requires only `PSQL_<NAME>_URL`. SQL Server requires
 `1433`.
 
 Put PostgreSQL database, schema/search path, TLS, and other libpq options in the
-URL. `MSSQL_<NAME>_ENCRYPT` is optional. Either kind can override its generated
-MCP server name with `<KIND>_<NAME>_MCP_NAME`.
+URL. `MSSQL_<NAME>_ENCRYPT` is optional and accepts `true` (default), `false`,
+`disable`, or `strict`. Note that `false` encrypts only the login packet and
+still performs a TLS handshake; a server with no usable certificate — typically
+an older SQL Server — needs `disable` and otherwise fails to start with
+`TLS Handshake failed: cannot read handshake packet: EOF`. Either kind can
+override its generated MCP server name with `<KIND>_<NAME>_MCP_NAME`.
 
 The installer safely parses assignments without executing the environment file,
 validates every declared connection, and copies it to
@@ -149,7 +155,9 @@ contains stale cache paths and an overly broad historical permission list.
 - Keep plugins project-scoped. Global Power BI plugins add instruction context
   to unrelated sessions.
 - Run `doctor.sh --live` when Desktop is open to add a bridge connectivity
-  check.
+  check and an MCP `initialize` handshake against every configured database
+  server, which surfaces credential and TLS faults that otherwise appear only
+  as `CONNECTION_CLOSED` inside an agent session.
 - Review [REVIEW.md](REVIEW.md) before removing anything from an existing
   installation.
 

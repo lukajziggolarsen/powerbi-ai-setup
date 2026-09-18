@@ -66,6 +66,24 @@ run() {
   fi
 }
 
+# Claude resolves --scope project from the process working directory, not from
+# --workspace. Every project-scoped claude call must therefore run inside the
+# workspace or the plugin is registered against the wrong project and shows up
+# as "not enabled" there.
+run_claude() {
+  if ((dry_run)); then
+    printf 'would run (cwd %q):' "$workspace"
+    printf ' %q' claude "$@"
+    printf '\n'
+  else
+    (cd "$workspace" && claude "$@")
+  fi
+}
+
+claude_list_json() {
+  (cd "$workspace" 2>/dev/null && claude plugin list --json 2>/dev/null) || true
+}
+
 has() { command -v "$1" >/dev/null 2>&1; }
 
 if ! has node || ! has npm || ! has npx; then
@@ -130,7 +148,7 @@ if ((!dry_run)) && [[ -r /proc/version ]] && grep -qi microsoft /proc/version &&
   fi
 fi
 
-run mkdir -p "$bin_dir" "$config_root"
+run mkdir -p "$workspace" "$bin_dir" "$config_root"
 for launcher in powerbi-env powerbi-modeling-mcp powerbi-psql-mcp powerbi-mssql-mcp; do
   run install -m 0755 "$blueprint_root/bin/$launcher" "$bin_dir/$launcher"
 done
@@ -164,11 +182,15 @@ codex_engineering_collision() {
 
 claude_plugin_record() {
   local plugin_id=$1
-  claude plugin list --json 2>/dev/null | node -e '
+  claude_list_json | node -e '
     let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
-      const row=JSON.parse(s).find(p=>p.id===process.argv[1]);
+      const [id, workspace] = process.argv.slice(1);
+      const rows = JSON.parse(s || "[]").filter(p=>p.id===id);
+      // A project-scoped install only applies to the project it was recorded
+      // against; anything else must be installed again for this workspace.
+      const row = rows.find(p=>(p.scope||"user")!=="project" || p.projectPath===workspace);
       if(!row) process.exit(1); process.stdout.write(row.scope || "user")
-    })' "$plugin_id"
+    })' "$plugin_id" "$workspace"
 }
 
 if ((!skip_plugins)); then
@@ -194,28 +216,28 @@ if ((!skip_plugins)); then
     run codex plugin add powerbi-engineering@powerbi-ai-blueprint
   fi
 
-  claude_marketplaces=$(claude plugin marketplace list 2>/dev/null || true)
+  claude_marketplaces=$( (cd "$workspace" && claude plugin marketplace list 2>/dev/null) || true)
   if ! grep -q 'fabric-collection' <<<"$claude_marketplaces"; then
-    run claude plugin marketplace add microsoft/skills-for-fabric --scope user
+    run_claude plugin marketplace add microsoft/skills-for-fabric --scope user
   else
-    run claude plugin marketplace update fabric-collection
+    run_claude plugin marketplace update fabric-collection
   fi
   if ! grep -q 'powerbi-ai-blueprint' <<<"$claude_marketplaces"; then
-    run claude plugin marketplace add "$blueprint_root" --scope user
+    run_claude plugin marketplace add "$blueprint_root" --scope user
   fi
 
   if installed_scope=$(claude_plugin_record powerbi-authoring@fabric-collection); then
-    run claude plugin update powerbi-authoring@fabric-collection --scope "$installed_scope" --yes
+    run_claude plugin update powerbi-authoring@fabric-collection --scope "$installed_scope" --yes
     if [[ "$installed_scope" != "$claude_scope" ]]; then
       echo "note: Claude powerbi-authoring remains $installed_scope-scoped (requested: $claude_scope)."
     fi
   else
-    run claude plugin install powerbi-authoring@fabric-collection --scope "$claude_scope" --yes
+    run_claude plugin install powerbi-authoring@fabric-collection --scope "$claude_scope" --yes
   fi
 
-  if claude plugin list --json 2>/dev/null | node -e '
+  if claude_list_json | node -e '
       let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
-        const rows=JSON.parse(s); process.exit(rows.some(p=>p.id.startsWith("powerbi-engineering@") && p.id!==process.argv[1])?0:1)
+        const rows=JSON.parse(s || "[]"); process.exit(rows.some(p=>p.id.startsWith("powerbi-engineering@") && p.id!==process.argv[1])?0:1)
       })' powerbi-engineering@powerbi-ai-blueprint; then
     echo "A different Claude powerbi-engineering plugin is already installed." >&2
     echo "Uninstall it before installing powerbi-engineering@powerbi-ai-blueprint." >&2
@@ -224,7 +246,7 @@ if ((!skip_plugins)); then
   if installed_scope=$(claude_plugin_record powerbi-engineering@powerbi-ai-blueprint); then
     echo "note: kept personal Claude powerbi-engineering plugin unchanged ($installed_scope scope)."
   else
-    run claude plugin install powerbi-engineering@powerbi-ai-blueprint --scope "$claude_scope" --yes
+    run_claude plugin install powerbi-engineering@powerbi-ai-blueprint --scope "$claude_scope" --yes
   fi
 fi
 

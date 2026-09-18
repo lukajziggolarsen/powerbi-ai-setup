@@ -42,7 +42,7 @@ for mapping in HOST:HOST DATABASE:DATABASE SCHEMA:SCHEMA USER:USER PASSWORD:PASS
   export "MSSQL_${exported_name}=$value"
 done
 MSSQL_PORT=$("$env_reader" get "$env_file" "${prefix}PORT") || MSSQL_PORT=1433
-MSSQL_ENCRYPT=$("$env_reader" get "$env_file" "${prefix}ENCRYPT") || MSSQL_ENCRYPT=true
+MSSQL_ENCRYPT=$("$env_reader" get "$env_file" "${prefix}ENCRYPT") || MSSQL_ENCRYPT=disable
 export MSSQL_PORT MSSQL_ENCRYPT
 
 version="${TOOLBOX_MCP_VERSION:-latest}"
