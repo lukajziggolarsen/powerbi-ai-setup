@@ -45,8 +45,8 @@ Apply Mode.
   `~/.{claude,codex}/plugins/cache/fabric-collection/powerbi-authoring/*/skills/semantic-model-authoring/references/`
   (`tmdl-guidelines.md`, `pbip.md`, `modeling-guidelines.md`,
   `naming-conventions.md`, `dax-guidelines.md`) and the sibling
-  `.../skills/powerbi-report-authoring/references/` for PBIR visuals, filters,
-  and formatting. If that path is absent, say so and proceed on the layer
+  `.../skills/powerbi-report-cli/references/authoring.md` (plus its
+  `authoring/` directory) for PBIR visuals, filters, and formatting. If that path is absent, say so and proceed on the layer
   standards alone.
 
 ## Suggest Mode

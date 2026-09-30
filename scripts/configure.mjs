@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { sourcesFromEnv } from "../bin/powerbi-env-lib.mjs";
 
 function parseArgs(argv) {
@@ -72,6 +73,17 @@ function upsertTomlSection(content, section, entries) {
   return `${lines.join("\n").replace(/\n+$/, "")}\n`;
 }
 
+function removeTomlSection(content, section) {
+  const header = `[${section}]`;
+  const lines = normalizeSection(content).split("\n");
+  const start = lines.findIndex((line) => line.trim() === header);
+  if (start < 0) return content;
+  let end = start + 1;
+  while (end < lines.length && !/^\s*\[/.test(lines[end])) end += 1;
+  lines.splice(start, end - start);
+  return `${lines.join("\n").replace(/\n+$/, "")}\n`;
+}
+
 function removeManagedMcpSections(content) {
   const lines = normalizeSection(content).split("\n");
   const managedCommand = /powerbi-(?:modeling|postgres|psql|mssql)-mcp["']?\s*$/;
@@ -95,10 +107,10 @@ function removeManagedMcpSections(content) {
 
 const args = parseArgs(process.argv.slice(2));
 const workspace = path.resolve(args.workspace || process.cwd());
-const blueprint = path.resolve(args.blueprint || path.join(import.meta.dirname, ".."));
+const setupRoot = path.resolve(args["setup-root"] || path.join(path.dirname(fileURLToPath(import.meta.url)), ".."));
 const binDir = path.resolve(args["bin-dir"] || path.join(os.homedir(), ".local", "bin"));
 const stateDir = path.resolve(
-  args["state-dir"] || path.join(os.homedir(), ".local", "state", "powerbi-ai-blueprint"),
+  args["state-dir"] || path.join(os.homedir(), ".local", "state", "powerbi-ai-setup"),
 );
 const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 const backupRoot = path.join(stateDir, "backups", timestamp);
@@ -158,12 +170,18 @@ if (new Set(allSourceNames).size !== allSourceNames.length) {
   throw new Error("Source MCP server names must be unique");
 }
 
+// Plugin IDs are <plugin>@<marketplace name from .claude-plugin/marketplace.json>.
+// The marketplace was called powerbi-ai-blueprint before the repository rename.
+const engineeringPlugin = "powerbi-engineering@powerbi-ai-setup";
+const legacyEngineeringPlugin = "powerbi-engineering@powerbi-ai-blueprint";
+
 const codexFile = path.join(workspace, ".codex", "config.toml");
 let codex = removeManagedMcpSections(readOr(codexFile, ""));
+codex = removeTomlSection(codex, `plugins."${legacyEngineeringPlugin}"`);
 codex = upsertTomlSection(codex, 'plugins."powerbi-authoring@fabric-collection"', {
   enabled: "true",
 });
-codex = upsertTomlSection(codex, 'plugins."powerbi-engineering@powerbi-ai-blueprint"', {
+codex = upsertTomlSection(codex, `plugins."${engineeringPlugin}"`, {
   enabled: "true",
 });
 codex = upsertTomlSection(
@@ -208,8 +226,9 @@ const claudeSettings = fs.existsSync(claudeSettingsFile) ? parseJson(claudeSetti
 claudeSettings.enabledPlugins = {
   ...(claudeSettings.enabledPlugins || {}),
   "powerbi-authoring@fabric-collection": true,
-  "powerbi-engineering@powerbi-ai-blueprint": true,
+  [engineeringPlugin]: true,
 };
+delete claudeSettings.enabledPlugins[legacyEngineeringPlugin];
 write(claudeSettingsFile, jsonText(claudeSettings), 0o644);
 
 const mcpFile = path.join(workspace, ".mcp.json");
@@ -243,19 +262,24 @@ for (const item of sources.mssql || []) {
 write(mcpFile, jsonText(mcp), 0o644);
 
 const claudeStateFile = path.resolve(
-  args["claude-state-file"] || path.join(os.homedir(), ".claude.json"),
+  args["claude-state-file"] ||
+    path.join(process.env.CLAUDE_CONFIG_DIR || os.homedir(), ".claude.json"),
 );
 const claudeState = fs.existsSync(claudeStateFile) ? parseJson(claudeStateFile) : {};
 claudeState.projects ||= {};
 claudeState.projects[workspace] ||= {};
 const disabled = new Set(claudeState.projects[workspace].disabledMcpServers || []);
-disabled.add("plugin:powerbi-authoring:powerbi-modeling-mcp");
-claudeState.projects[workspace].disabledMcpServers = [...disabled].sort();
-write(claudeStateFile, jsonText(claudeState), 0o600);
+// Claude rewrites this state file constantly, in its own formatting; touch it
+// only when the entry is missing so a rerun cannot clobber a live session.
+if (!disabled.has("plugin:powerbi-authoring:powerbi-modeling-mcp")) {
+  disabled.add("plugin:powerbi-authoring:powerbi-modeling-mcp");
+  claudeState.projects[workspace].disabledMcpServers = [...disabled].sort();
+  write(claudeStateFile, jsonText(claudeState), 0o600);
+}
 
 for (const file of ["AGENTS.md", "CLAUDE.md"]) {
   const target = path.join(workspace, file);
-  const template = path.join(blueprint, "templates", file);
+  const template = path.join(setupRoot, "templates", file);
   if (!fs.existsSync(target)) write(target, fs.readFileSync(template, "utf8"), 0o644);
   else console.log(`kept existing guidance: ${target}`);
 }

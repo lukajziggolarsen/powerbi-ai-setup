@@ -1,7 +1,7 @@
 {
-  "name": "powerbi-ai-blueprint",
+  "name": "powerbi-ai-setup",
   "interface": {
-    "displayName": "Powerbi Ai Blueprint"
+    "displayName": "Power BI AI Setup"
   },
   "plugins": [
     {

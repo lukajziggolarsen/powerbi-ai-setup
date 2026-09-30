@@ -5,15 +5,18 @@ Fabric as validation/deployment targets, not as the only copy of the solution.
 
 ## Route work deliberately
 
-- PBIR pages, visuals, filters, themes, validation, reloads, and screenshots:
-  use the Microsoft `powerbi-report-authoring` skill.
-- Open-ended report design: use `powerbi-report-design`. If the user asks for
-  the Scapp/house style or the project is one of the established Scapp reports,
-  use `scapp-report-blueprint` as the visual contract and the Microsoft skill
-  for PBIR mechanics.
-- Greenfield requirements and an approval gate: use
-  `powerbi-report-planning`. Do not invoke it for a bounded existing-report
-  edit.
+- Report work uses Microsoft's `powerbi-report-cli` skill. It dispatches to
+  one mode; read that mode's `references/<mode>.md` before acting:
+  - `authoring`: PBIR pages, visuals, filters, themes, validation, reloads,
+    and screenshots.
+  - `design`: open-ended report design. If the user asks for the Scapp/house
+    style or the project is one of the established Scapp reports, use
+    `scapp-report-blueprint` as the visual contract and `authoring` mode for
+    PBIR mechanics.
+  - `planning`: greenfield requirements and an approval gate. Do not use it
+    for a bounded existing-report edit.
+  - `management`: optional Fabric report upload/download/publish, only after
+    the user explicitly requests a service-side change.
 - Routine table, column, relationship, measure, partition, or TMDL authoring:
   use `semantic-model-authoring`.
 - Wrong totals, slow or complex DAX, Server Timings, or calculation-group
@@ -24,9 +27,6 @@ Fabric as validation/deployment targets, not as the only copy of the solution.
   `powerbi-sql-optimization`.
 - Full audits and cross-layer remediation are explicit workflows:
   `powerbi-solution-audit` then `powerbi-remediate`.
-- Fabric report upload/download/publish is optional and uses
-  `powerbi-report-management` only after the user explicitly requests a
-  service-side change.
 
 ## Modeling MCP
 

@@ -50,17 +50,19 @@ current semantic-model-authoring references for modeling, naming, TMDL, DAX,
 DAX performance, Direct Lake, and PBIP authoring. Treat them as implementation
 guidance; use Microsoft Learn links above for external attribution.
 
-On this machine they live in the Codex plugin cache (the version directory
+They live in the Claude Code and Codex plugin caches (the version directory
 changes on plugin updates, so resolve it with a glob):
 
 ```bash
-find ~/.codex/plugins/cache/fabric-collection/powerbi-authoring/*/skills \
-  -path "*semantic-model-authoring/references/*" -name "*.md"
+find ~/.claude/plugins/cache/fabric-collection/powerbi-authoring/*/skills \
+  ~/.codex/plugins/cache/fabric-collection/powerbi-authoring/*/skills \
+  -path "*semantic-model-authoring/references/*" -name "*.md" 2>/dev/null
 ```
 
 Key files: `modeling-guidelines.md`, `naming-conventions.md`,
 `dax-guidelines.md`, `dax-perf-decision-guide.md` (routes into
 `dax-perf-patterns.md`), `tmdl-guidelines.md`, `pbip.md`, and
 `direct-lake-guidelines.md` (Direct Lake models only). PBIR report-side
-references are the sibling `powerbi-report-authoring/references/` directory.
+references are the sibling `powerbi-report-cli/references/` directory
+(`authoring.md` and `authoring/` for PBIR, `design.md` and `design/` for layout).
 If the path is absent, state that and rely on the Microsoft Learn links above.

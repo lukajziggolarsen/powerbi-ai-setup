@@ -1,6 +1,6 @@
 ---
 name: scapp-report-blueprint
-description: Build, restyle, or review PBIR pages specifically in the in-house Scapp visual system used by Core Marketing, Daily Sale, Core Auto, F1 Loans, Daily Collection, Call Sales, and RPC. Use only when the user names Scapp, asks for the company or house style, references one of those reports as the design target, or audits an existing Scapp page for design drift. For generic Power BI design, use powerbi-report-design instead.
+description: Build, restyle, or review PBIR pages specifically in the in-house Scapp visual system used by Core Marketing, Daily Sale, Core Auto, F1 Loans, Daily Collection, Call Sales, and RPC. Use only when the user names Scapp, asks for the company or house style, references one of those reports as the design target, or audits an existing Scapp page for design drift. For generic Power BI design, use powerbi-report-cli in design mode instead.
 ---
 
 # Scapp Power BI Report Blueprint

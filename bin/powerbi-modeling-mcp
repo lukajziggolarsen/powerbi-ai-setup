@@ -5,7 +5,7 @@ set +x
 config_root="${XDG_CONFIG_HOME:-$HOME/.config}/powerbi-ai"
 version_file="${POWERBI_AI_VERSIONS_FILE:-$config_root/versions.env}"
 if [[ -r "$version_file" ]]; then
-  # This file is installed from the trusted blueprint and contains assignments only.
+  # This file is installed from the trusted powerbi-ai-setup checkout and contains assignments only.
   # shellcheck disable=SC1090
   source "$version_file"
 fi
@@ -20,10 +20,13 @@ fi
 # In WSL, run the Windows package so the server can see Desktop's local
 # Analysis Services process and named pipes. It also opens PBIP folders over
 # \\wsl.localhost UNC paths, so one server covers both live and file workflows.
+# PATH is re-read from the registry because powershell.exe inherits the one
+# Windows had when WSL started, which misses a Node.js installed since then.
 if command -v powershell.exe >/dev/null 2>&1; then
   ps_package="'${package//\'/\'\'}'"
   ps_command=$(printf '%s' \
     '$ErrorActionPreference="Stop"; Set-Location C:\; ' \
+    '$env:Path=[Environment]::GetEnvironmentVariable("Path","Machine")+";"+[Environment]::GetEnvironmentVariable("Path","User"); ' \
     '$npx=(Get-Command npx.cmd -ErrorAction Stop).Source; ' \
     '& $npx -y ' "$ps_package" ' --start --readwrite; exit $LASTEXITCODE')
   exec powershell.exe -NoProfile -NonInteractive -Command "$ps_command"

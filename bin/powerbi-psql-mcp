@@ -43,9 +43,17 @@ if [[ -z "$uvx_command" ]]; then
   echo "uvx is required for PostgreSQL MCP connections" >&2
   exit 5
 fi
-if [[ "$version" == "latest" ]]; then
-  exec "$uvx_command" --upgrade-package postgres-mcp --from postgres-mcp \
-    --with 'mcp[cli]<2' postgres-mcp --access-mode=restricted
+# Pin the interpreter: postgres-mcp needs >=3.12 and its pglast dependency only
+# ships wheels up to 3.13, so the distro Python (3.14 on Ubuntu 26.04) would
+# need a C compiler. uv downloads a managed interpreter when none matches.
+python_version="${PSQL_MCP_PYTHON:-3.12}"
+if [[ ! "$python_version" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+  echo "Invalid PSQL_MCP_PYTHON value" >&2
+  exit 2
 fi
-exec "$uvx_command" --from "postgres-mcp==$version" --with 'mcp[cli]<2' \
-  postgres-mcp --access-mode=restricted
+if [[ "$version" == "latest" ]]; then
+  exec "$uvx_command" --python "$python_version" --upgrade-package postgres-mcp \
+    --from postgres-mcp --with 'mcp[cli]<2' postgres-mcp --access-mode=restricted
+fi
+exec "$uvx_command" --python "$python_version" --from "postgres-mcp==$version" \
+  --with 'mcp[cli]<2' postgres-mcp --access-mode=restricted

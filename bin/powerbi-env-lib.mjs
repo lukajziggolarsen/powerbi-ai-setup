@@ -36,17 +36,9 @@ function profiles(values, kind) {
     if (!match) throw new Error(`${key} does not match ${prefix}_<CONNECTION_NAME>_<FIELD>`);
     discovered.push(match[1]);
   }
-  const result = [...new Set(discovered)].map((profile) => profile.toLowerCase());
-  const seen = new Set();
-  for (const profile of result) {
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(profile)) {
-      throw new Error(`${prefix} connection name ${JSON.stringify(profile)} must use letters, numbers, and underscores`);
-    }
-    const normalized = profile.toUpperCase();
-    if (seen.has(normalized)) throw new Error(`${listKey} contains duplicate profile ${profile}`);
-    seen.add(normalized);
-  }
-  return result;
+  // Keys are already uppercase and match [A-Z][A-Z0-9_]*, so the Set is enough
+  // to deduplicate and every name is a valid launcher profile.
+  return [...new Set(discovered)].map((profile) => profile.toLowerCase());
 }
 
 function profileKey(kind, profile, suffix) {
@@ -74,11 +66,8 @@ function validatePort(values, kind, profile, fallback) {
 function validateSchema(values, kind, profile) {
   const key = profileKey(kind, profile, "SCHEMA");
   const schema = requiredValue(values, key);
-  const pattern = kind === "psql"
-    ? /^[A-Za-z_][A-Za-z0-9_$]*(\s*,\s*[A-Za-z_][A-Za-z0-9_$]*)*$/
-    : /^[A-Za-z_][A-Za-z0-9_$]*$/;
-  if (!pattern.test(schema)) {
-    throw new Error(`${key} must contain ${kind === "psql" ? "one or more comma-separated" : "one"} unquoted schema identifier(s)`);
+  if (!/^[A-Za-z_][A-Za-z0-9_$]*$/.test(schema)) {
+    throw new Error(`${key} must contain one unquoted schema identifier`);
   }
   return schema;
 }

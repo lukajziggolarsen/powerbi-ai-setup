@@ -1,171 +1,239 @@
-# Power BI AI development blueprint
+# Power BI AI development setup
 
-This is a portable, opinionated setup for developing source-controlled Power
-BI projects with both Codex and Claude Code. It keeps Microsoft's authoring
-plugin as the general-purpose layer, adds a small local plugin for specialized
-engineering, and exposes exactly one modeling MCP to each agent.
+One script that turns a fresh WSL distro into a working environment for
+developing source-controlled Power BI projects (PBIP/PBIR/TMDL) with both
+**Claude Code** and **Codex**. It installs the toolchain, registers the same
+plugins with both agents, wires exactly one Power BI modeling MCP (plus optional
+read-only database MCPs), and writes the shared agent guidance.
 
-The blueprint targets **Windows 11 + Power BI Desktop + WSL 2**. It is safe to
-inspect or run with `--dry-run`; it does not change the current machine merely
-by existing in this repository.
+Target platform: **Windows 11 + WSL 2 + Power BI Desktop**. Verified from
+scratch on fresh Ubuntu 24.04 and 26.04 WSL distros, as a user without sudo.
 
-## Architecture
+## What you get
 
-| Layer | Selected component | Purpose |
+| Layer | Component | Purpose |
 |---|---|---|
-| Report/model skills | `powerbi-authoring@fabric-collection` | Microsoft's PBIR, design, planning, semantic-model, and optional Fabric workflows |
-| Deep engineering | `powerbi-engineering@powerbi-ai-blueprint` | Difficult DAX, M, SQL, full audits, approved remediation, and Scapp-only design |
-| PBIR CLI | `powerbi-report-author` | Deterministic report editing and validation |
-| Desktop bridge | `powerbi-desktop` | Open/reload/screenshot validation in Power BI Desktop |
-| Modeling MCP | one Windows-side `powerbi-modeling` server | Live Desktop and offline PBIP/TMDL model operations without 21 duplicate tools |
-| Source MCPs | optional project profiles | Read-only PostgreSQL or SQL Server evidence when a project needs it |
-| Agent policy | `AGENTS.md` and `CLAUDE.md` | The same routing, security, and definition-of-done contract for both agents |
+| Report/model skills | `powerbi-authoring@fabric-collection` | Microsoft's `powerbi-report-cli` (planning, design, PBIR authoring, Fabric management modes) and `semantic-model-authoring` skills |
+| Deep engineering | `powerbi-engineering@powerbi-ai-setup` (vendored in `plugins/`) | Difficult DAX, M and SQL, full audits, approved remediation, Scapp house-style design |
+| PBIR CLI | `powerbi-report-author` | Deterministic report editing and `validate` |
+| Desktop bridge | `powerbi-desktop` | Open, reload and screenshot reports in Power BI Desktop |
+| Modeling MCP | one Windows-side `powerbi-modeling` server | Live Desktop and offline PBIP/TMDL model operations, without the plugin's duplicate WSL-side server |
+| Source MCPs | optional, one per database profile | Read-only PostgreSQL or SQL Server evidence |
+| Agent policy | `AGENTS.md` and `CLAUDE.md` in the workspace | One routing, security and definition-of-done contract for both agents |
 
-Power BI Desktop is the only mandatory GUI component. Online plugins, skills,
-CLIs, and MCP packages follow their upstream `latest` release by default. The
-personal `powerbi-engineering` plugin remains at its locally declared version
-and is never automatically upgraded from an online source.
+## Requirements
 
-## Fresh-machine setup
+- **Windows 11 with WSL 2** and any Ubuntu distro (`wsl --install` is enough).
+  Ubuntu already ships `git`, `curl`, `tar` and `sha256sum`; nothing else needs
+  to be installed first, and no sudo is required.
+- **Power BI Desktop** on Windows, with the Desktop bridge (external tools)
+  preview feature enabled, then Desktop restarted.
+- **Internet access** to nodejs.org, github.com, registry.npmjs.org and pypi.org.
+- A Claude and an OpenAI account to sign in to the two agents afterwards.
 
-Prerequisites:
+`setup.sh` bootstraps the rest: Node.js LTS and `uv` into `~/.local` (official
+builds, checksum-verified), and Node.js LTS on Windows through `winget` if it is
+missing (accept the UAC prompt).
 
-- Power BI Desktop on Windows. In Desktop, enable the external-tool/Desktop
-  bridge preview feature and restart Desktop.
-- WSL 2 with Node.js 20+ (`node`, `npm`, and `npx`) and Git.
-- Node.js LTS on Windows. The installer can install this through `winget` if it
-  is missing.
-
-Copy or clone this directory onto the new machine, then preview the work:
-
-```bash
-cd powerbi-ai-blueprint
-./setup.sh --workspace /path/to/powerbi-workspace --dry-run
-```
-
-Run it for real:
+## Quick start on a new machine
 
 ```bash
-./setup.sh --workspace /path/to/powerbi-workspace
-./doctor.sh --workspace /path/to/powerbi-workspace
+mkdir -p ~/powerbi && cd ~/powerbi
+git clone https://github.com/lukajziggolarsen/powerbi-ai-setup.git
+cd powerbi-ai-setup
+
+./setup.sh --workspace ~/powerbi --dry-run   # preview; changes nothing
+./setup.sh --workspace ~/powerbi             # add --env-file FILE for database MCPs
 ```
 
-The installer:
+`--workspace` is the folder the agents are started in: it receives `.mcp.json`,
+`.codex/config.toml`, `.claude/settings.json`, `AGENTS.md` and `CLAUDE.md`. The
+layout above (this checkout inside the workspace) is a convention, not a
+requirement. Clone over HTTPS on a new machine; it has no SSH key yet.
 
-- installs missing Codex and Claude Code CLIs and the latest Power BI CLIs;
-- refreshes Microsoft's Fabric marketplace and registers this local marketplace;
-- installs both plugins at project scope for Claude and enables them for the
-  Codex project. Claude resolves project scope from the working directory, so
-  the installer runs every `claude plugin` command inside `--workspace`; run
-  `doctor.sh` with the same `--workspace` or the plugins read as not enabled;
-- installs shared MCP launchers under `~/.local/bin`;
-- writes minimal project configs, disabling the bundled duplicate modeling MCP;
-- creates backups under `~/.local/state/powerbi-ai-blueprint/backups` before
-  changing an existing config;
-- preserves pre-existing `AGENTS.md` and `CLAUDE.md` files.
-
-Use `--help` to see skip flags and alternative paths. Rerun the installer to
-refresh online components to their latest releases; configuration writes are
-idempotent. `versions.env` can temporarily replace `latest` with an exact
-package version if an upstream compatibility regression must be isolated.
-
-### Optional database MCPs
-
-Database tools are omitted by default. A single environment file declares any
-number of connections. The installer derives MCP registrations directly from
-the variable names, so no connection names are hardcoded in scripts or JSON.
+Then **open a new terminal**, so `~/.local/bin` is on `PATH`, and finish:
 
 ```bash
-cp config/connections.env.example /tmp/my-powerbi-connections.env
-# Replace the example profiles and values. Do not commit this populated file.
-
-./setup.sh \
-  --workspace /path/to/powerbi-workspace \
-  --env-file /tmp/my-powerbi-connections.env
-./doctor.sh \
-  --workspace /path/to/powerbi-workspace \
-  --env-file ~/.config/powerbi-ai/connections.env
+~/powerbi/powerbi-ai-setup/doctor.sh --workspace ~/powerbi          # static checks
+~/powerbi/powerbi-ai-setup/doctor.sh --workspace ~/powerbi --live   # with Desktop open
+cd ~/powerbi
+claude   # sign in, trust the folder, approve the project MCP servers
+codex    # sign in
 ```
 
-Use the contract `<KIND>_<CONNECTION_NAME>_<FIELD>`. Connection names are
-chosen by you and must use uppercase letters, numbers, and underscores:
+A dry run on a machine without Node.js stops after announcing the Node.js
+install, because the rest of the preview needs Node.js.
+
+## What setup.sh does
+
+1. Checks for `curl`, `tar`, `sha256sum` and `git`, and puts `~/.local/bin` on
+   `PATH` for the run.
+2. Installs Node.js LTS unless a Linux Node.js 22+ (Claude Code's minimum) is
+   already on `PATH`, and
+   points npm's global prefix at `~/.local` when the current one is not
+   writable. Windows' `npm`/`npx`/`claude` shims on the appended Windows `PATH`
+   are never mistaken for the Linux tools.
+3. Installs any missing Codex and Claude Code CLIs, and the latest Power BI
+   `powerbi-report-author` and `powerbi-desktop` CLIs.
+4. Validates the database profile file, if there is one, and installs `uv`
+   when a PostgreSQL profile needs it.
+5. Checks that Windows interop works and that Windows `npx.cmd` exists
+   (installing Windows Node.js LTS with `winget` if not).
+6. Installs the MCP launchers into `~/.local/bin` and their config into
+   `~/.config/powerbi-ai/`.
+7. Registers Microsoft's `fabric-collection` marketplace and this checkout as the
+   local `powerbi-ai-setup` marketplace with both agents, removing a registration
+   under the old `powerbi-ai-blueprint` name or one pointing at a moved checkout.
+8. Installs both plugins: Claude at project scope for `--workspace` (every
+   `claude plugin` call runs inside the workspace, because Claude resolves the
+   project from the working directory), Codex globally.
+9. Runs `scripts/configure.mjs` to write the workspace configs. It disables the
+   plugin's duplicate modeling server, backs up every file it changes under
+   `~/.local/state/powerbi-ai-setup/backups/`, and never overwrites an existing
+   `AGENTS.md` or `CLAUDE.md`.
+
+Every step is idempotent: rerunning changes nothing that is already right.
+
+| Option | Effect |
+|---|---|
+| `--workspace PATH` | Required. Workspace to configure; created if missing. |
+| `--env-file FILE` | Database profiles (see below). Defaults to the installed `~/.config/powerbi-ai/connections.env` on reruns. |
+| `--claude-scope SCOPE` | `project` (default), `local` or `user` for the Claude plugins. |
+| `--bin-dir PATH` | Launcher directory (default `~/.local/bin`). |
+| `--dry-run` | Print what would change. |
+| `--skip-agent-clis` | Do not install missing Codex or Claude CLIs. |
+| `--skip-npm-packages` | Do not install or upgrade the Power BI CLIs. |
+| `--skip-plugins` | Do not touch marketplaces or plugins. |
+| `--no-windows-node-install` | Only check for Windows `npx.cmd`; never run `winget`. |
+
+`doctor.sh [--workspace PATH] [--env-file FILE] [--live]` changes nothing. It
+checks the toolchain, marketplace paths, plugin load errors and versions,
+project configs, credential leaks, and the database profile file. With
+`--live` it also asks the Desktop bridge for status and completes an MCP
+`initialize` handshake with every configured server, which surfaces credential
+and TLS faults that otherwise appear only as `CONNECTION_CLOSED` inside an agent
+session.
+
+## Optional database MCPs
+
+Database tools are omitted by default. One environment file declares any number
+of connections, and setup derives an MCP server for each one from the variable
+names, so no connection names are hardcoded in scripts or JSON.
+
+```bash
+cp config/connections.env.example ~/my-connections.env
+chmod 600 ~/my-connections.env
+# Replace the example profiles and values. Never commit the populated file.
+./setup.sh --workspace ~/powerbi --env-file ~/my-connections.env
+rm ~/my-connections.env   # setup keeps its own copy (mode 600)
+```
+
+Use the contract `<KIND>_<CONNECTION_NAME>_<FIELD>`. You choose the connection
+names: uppercase letters, numbers and underscores.
 
 ```dotenv
-PSQL_WAREHOUSE_URL=replace_with_postgresql_url
+PSQL_WAREHOUSE_URL='postgresql://read_only_user:replace-me@host:5432/db?sslmode=require'
 
 MSSQL_OPERATIONS_HOST='host'
 MSSQL_OPERATIONS_PORT='1433'
 MSSQL_OPERATIONS_DATABASE='database'
 MSSQL_OPERATIONS_SCHEMA='dbo'
 MSSQL_OPERATIONS_USER='read_only_user'
-MSSQL_OPERATIONS_PASSWORD=replace_me
+MSSQL_OPERATIONS_PASSWORD='replace_me'
 MSSQL_OPERATIONS_ENCRYPT='true'
 ```
 
-Repeat either block with another connection name to add another database. For
-example, `PSQL_ARCHIVE_*` and `MSSQL_FINANCE_*` create two additional MCP
-servers. PostgreSQL requires only `PSQL_<NAME>_URL`. SQL Server requires
-`HOST`, `DATABASE`, `SCHEMA`, `USER`, and `PASSWORD`; its port defaults to
-`1433`.
+These become the MCP servers `psql-warehouse` and `mssql-operations`; override
+a name with `<KIND>_<NAME>_MCP_NAME`. Repeat a block with another name for
+another database.
 
-Put PostgreSQL database, schema/search path, TLS, and other libpq options in the
-URL. `MSSQL_<NAME>_ENCRYPT` is optional and accepts `true` (default), `false`,
-`disable`, or `strict`. Note that `false` encrypts only the login packet and
-still performs a TLS handshake; a server with no usable certificate — typically
-an older SQL Server — needs `disable` and otherwise fails to start with
-`TLS Handshake failed: cannot read handshake packet: EOF`. Either kind can
-override its generated MCP server name with `<KIND>_<NAME>_MCP_NAME`.
+- **PostgreSQL** needs only `PSQL_<NAME>_URL`. Put the database, search path,
+  TLS and other libpq options in the URL. It runs `postgres-mcp` in restricted
+  mode through `uvx` on Python `PSQL_MCP_PYTHON` from `versions.env` (3.12; `uv`
+  downloads it if the distro lacks it).
+- **SQL Server** needs `HOST`, `DATABASE`, `SCHEMA`, `USER` and `PASSWORD`;
+  `PORT` defaults to 1433. It runs MCP Toolbox through `npx`. Toolbox has no
+  connection-level schema, so `SCHEMA` is only a qualification hint.
+  `ENCRYPT` accepts `true` (default), `false`, `disable` or `strict`: `false`
+  still performs a TLS handshake, so a server without a usable certificate,
+  typically an older SQL Server, needs `disable`.
 
-The installer safely parses assignments without executing the environment file,
-validates every declared connection, and copies it to
-`~/.config/powerbi-ai/connections.env` with mode `0600`.
+Setup parses the file without executing it, validates every connection, and
+installs it as `~/.config/powerbi-ai/connections.env` with mode 600. The
+launchers read secrets from there at start-up; no credential is ever written to
+an agent config. Database permissions, not the MCP, must enforce read-only
+access.
 
-For SQL Server, Toolbox has no connection-level schema setting, so `SCHEMA` is
-supplied to the MCP as the preferred qualification hint; database permissions
-remain the actual security boundary.
+## Updating
 
-PostgreSQL connections require `uvx`. SQL Server connections use the latest
-Toolbox package through `npx`. All database accounts must enforce read-only access at
-the database; the MCP configuration cannot substitute for database grants.
+- **Toolchain.** Rerun `setup.sh --workspace ~/powerbi`. Online components
+  follow their `latest` releases; to isolate an upstream regression, temporarily
+  replace `latest` in `versions.env` with an exact version.
+- **The vendored `powerbi-engineering` plugin.** Edit it under `plugins/`, then
+  bump `version` in both `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`
+  and rerun setup. Claude caches plugins by version and ignores same-version
+  changes; `doctor.sh` warns when an installed copy lags the checkout.
+- **Workspace guidance.** `AGENTS.md` and `CLAUDE.md` are only created, never
+  updated. After changing `templates/`, copy them over yourself.
 
-## Migrating this machine
+## Moving or renaming this checkout
 
-This machine already has a local engineering plugin under different
-marketplace names. The installer intentionally stops instead of silently
-replacing it. After reviewing the vendored plugin, remove the old registrations
-and rerun setup:
+Both agents register this directory by absolute path. After a move, Claude shows
+`powerbi-engineering` as "failed to load" and Codex refuses to list any plugin.
+Rerun `setup.sh` from the new location; it re-registers the marketplace there.
 
-```bash
-codex plugin remove powerbi-engineering@personal
-claude plugin uninstall powerbi-authoring@fabric-collection --scope user
-claude plugin uninstall powerbi-engineering@local-plugins --scope user
-./setup.sh --workspace /home/ziggo/powerbi
+This repository was previously called `powerbi-ai-blueprint`, and so was its
+marketplace (plugin ID `powerbi-engineering@powerbi-ai-blueprint`). A rerun of
+setup removes that registration from both agents and rewrites the workspace
+configs to `powerbi-engineering@powerbi-ai-setup`.
+
+Setup stops rather than replace a `powerbi-engineering` plugin from any other
+marketplace. Uninstall that one first (`codex plugin remove <id>`,
+`claude plugin uninstall <id> --scope <scope>`).
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `MZ: not found` or `exec format error` for any `.exe`; doctor reports Windows interop is broken | Another distro running systemd cleared the shared `WSLInterop` binfmt entry, typically when it stopped. From a Windows terminal: `wsl -u root -e sh -c 'echo :WSLInterop:M::MZ::/init:PF > /proc/sys/fs/binfmt_misc/register'` (or `wsl --shutdown`). |
+| Claude plugin "failed to load"; Codex `marketplace root does not contain a supported manifest` | The checkout moved. Rerun `setup.sh`. |
+| Commands missing right after setup | `~/.local/bin` is not on `PATH` yet. Open a new terminal; Ubuntu's `~/.profile` adds it once it exists. With zsh, add `export PATH="$HOME/.local/bin:$PATH"` to `~/.zprofile`. |
+| Windows `npx.cmd` is unavailable | Install Node.js LTS on Windows (or let setup use `winget`), then rerun. Setup and the launcher re-read the Windows `PATH` from the registry, so no restart is needed. |
+| PostgreSQL MCP: `Failed to build pglast` | `postgres-mcp` ran on a Python without `pglast` wheels. Keep `PSQL_MCP_PYTHON` at a version with wheels (3.12 or 3.13). |
+| SQL Server MCP: `TLS Handshake failed: cannot read handshake packet: EOF` | Set `MSSQL_<NAME>_ENCRYPT='disable'` for that server. |
+| Claude plugins read "not enabled" | Run `claude` and `doctor.sh` from, or with, the same `--workspace` that setup used. |
+
+## Repository layout
+
+```text
+setup.sh, doctor.sh        installer and read-only checker
+versions.env               upstream version channels (installed to ~/.config/powerbi-ai)
+bin/                       MCP launchers and the env-file reader (installed to ~/.local/bin)
+config/                    database profile example and the SQL Server Toolbox config
+scripts/configure.mjs      writes the workspace and agent configs
+scripts/mcp-probe.mjs      MCP initialize handshake used by doctor --live
+scripts/secret-audit.mjs   credential-literal scanner used by doctor
+templates/                 AGENTS.md and CLAUDE.md for new workspaces
+plugins/powerbi-engineering/   the vendored Claude/Codex plugin
+.claude-plugin/, .agents/plugins/   marketplace manifests for Claude and Codex
 ```
 
-Do not copy the existing `.claude/settings.local.json` to another machine. It
-contains stale cache paths and an overly broad historical permission list.
+## Security
 
-## Security and maintenance
+- Never put connection URIs, passwords, PATs or tokens in `.codex/config.toml`,
+  `.mcp.json`, Claude settings or any repository. Run
+  `node scripts/secret-audit.mjs <files...>` before committing agent configs; it
+  reports file and line only, never the value.
+- Keep the Power BI plugins project-scoped; global plugins add their
+  instructions to unrelated sessions.
+- Do not copy `.claude/settings.local.json` between machines; it holds
+  machine-specific paths and permissions.
 
-- Never put connection URIs, passwords, PATs, or tokens in `.codex/config.toml`,
-  `.mcp.json`, Claude settings, or a repository.
-- Run `node scripts/secret-audit.mjs <config-files...>` before committing agent
-  configuration. The scanner reports only file and line, never the matched
-  value.
-- Keep plugins project-scoped. Global Power BI plugins add instruction context
-  to unrelated sessions.
-- Run `doctor.sh --live` when Desktop is open to add a bridge connectivity
-  check and an MCP `initialize` handshake against every configured database
-  server, which surfaces credential and TLS faults that otherwise appear only
-  as `CONNECTION_CLOSED` inside an agent session.
-- Review [REVIEW.md](REVIEW.md) before removing anything from an existing
-  installation.
-
-## Primary references
+## References
 
 - [Microsoft skills for Fabric](https://github.com/microsoft/skills-for-fabric/blob/main/README.md)
 - [Microsoft Power BI modeling MCP](https://github.com/microsoft/powerbi-modeling-mcp)
 - [Power BI Desktop bridge](https://learn.microsoft.com/en-us/power-bi/developer/agentic/power-bi-desktop-bridge-overview)
-- [Claude Code MCP configuration](https://code.claude.com/docs/en/mcp)
-- [Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp)
-- [Codex plugins](https://learn.chatgpt.com/docs/plugins)
+- [Claude Code plugins](https://code.claude.com/docs/en/plugins) and [MCP configuration](https://code.claude.com/docs/en/mcp)
+- [Codex plugins](https://learn.chatgpt.com/docs/plugins) and [MCP configuration](https://learn.chatgpt.com/docs/extend/mcp)
+- [WSL configuration (`wsl.conf`)](https://learn.microsoft.com/en-us/windows/wsl/wsl-config)
