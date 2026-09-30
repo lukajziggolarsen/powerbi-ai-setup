@@ -73,3 +73,12 @@ Never place passwords, connection URIs, access tokens, or PATs in
 command history. Launchers read secrets from
 `~/.config/powerbi-ai/connections.env` (mode `0600`) or an approved credential
 store. Rotate a credential immediately if it is exposed in plaintext.
+
+Everything you read or print is sent to your model provider, so never read,
+print, search, or copy database credentials: not the profile file or
+`~/.config/powerbi-ai/`, not `powerbi-env get` or `psql-url`, and not another
+process's environment (`env`, `/proc/*/environ`, `ps e`). To check a database
+connection, run `doctor.sh --live`; it reports failures without printing
+secrets. If a credential is needed, ask the user to handle it. In Claude Code a
+guard enforces this for file tools and Bash; treat it as a backstop, not
+permission to probe.

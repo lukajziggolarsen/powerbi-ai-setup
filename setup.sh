@@ -304,7 +304,7 @@ if ((!dry_run)) && [[ -r /proc/version ]] && grep -qi microsoft /proc/version; t
 fi
 
 run mkdir -p "$workspace" "$bin_dir" "$config_root"
-for launcher in powerbi-env powerbi-modeling-mcp powerbi-psql-mcp powerbi-mssql-mcp; do
+for launcher in powerbi-env powerbi-modeling-mcp powerbi-psql-mcp powerbi-mssql-mcp powerbi-secret-guard; do
   run install -m 0755 "$setup_root/bin/$launcher" "$bin_dir/$launcher"
 done
 run install -m 0644 "$setup_root/bin/powerbi-env-lib.mjs" "$bin_dir/powerbi-env-lib.mjs"

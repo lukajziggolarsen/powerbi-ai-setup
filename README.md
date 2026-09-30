@@ -91,8 +91,9 @@ install, because the rest of the preview needs Node.js.
    Claude at project scope for `--workspace` (every `claude plugin` call runs
    inside the workspace, because Claude resolves the project from the working
    directory), Codex globally.
-9. Runs `scripts/configure.mjs` to write the workspace configs. It disables the
-   plugin's duplicate modeling server, backs up every file it changes under
+9. Runs `scripts/configure.mjs` to write the workspace configs and the Claude
+   credential guard (see [Security](#security)). It disables the plugin's
+   duplicate modeling server, backs up every file it changes under
    `~/.local/state/powerbi-ai-setup/backups/`, and never overwrites an existing
    `AGENTS.md` or `CLAUDE.md`.
 10. Starts every configured MCP server once through its launcher. That installs
@@ -229,6 +230,7 @@ marketplace. Uninstall that one first (`codex plugin remove <id>`,
 | Windows `npx.cmd` is unavailable | Install Node.js LTS on Windows (or let setup use `winget`), then rerun. Setup and the launcher re-read the Windows `PATH` from the registry, so no restart is needed. |
 | PostgreSQL MCP: `Failed to build pglast` | `postgres-mcp` ran on a Python without `pglast` wheels. Keep `PSQL_MCP_PYTHON` at a version with wheels (3.12 or 3.13). |
 | SQL Server MCP: `TLS Handshake failed: cannot read handshake packet: EOF` | Set `MSSQL_<NAME>_ENCRYPT='disable'` for that server. |
+| Claude says `Blocked by powerbi-secret-guard` | Working as intended: the command named the credentials or an environment dump. Test connections with `doctor.sh --live`, search code with Claude's Grep tool, and open the profile file yourself if you need to edit it. |
 | Claude plugins read "not enabled" | Run `claude` and `doctor.sh` from, or with, the same `--workspace` that setup used. |
 
 ## Repository layout
@@ -236,7 +238,8 @@ marketplace. Uninstall that one first (`codex plugin remove <id>`,
 ```text
 setup.sh, doctor.sh        installer and read-only checker
 versions.env               upstream version channels (installed to ~/.config/powerbi-ai)
-bin/                       MCP launchers and the env-file reader (installed to ~/.local/bin)
+bin/                       MCP launchers, the env-file reader and powerbi-secret-guard
+                           (installed to ~/.local/bin)
 config/                    database profile example and the SQL Server Toolbox config
 scripts/configure.mjs      writes the workspace and agent configs
 scripts/mcp-probe.mjs      MCP initialize handshake (setup warm-up, doctor --live)
@@ -248,6 +251,50 @@ plugins/powerbi-engineering/   the vendored Claude/Codex plugin
 ```
 
 ## Security
+
+### Where the database credentials go
+
+Setup never sends a credential anywhere. It keeps one copy in
+`~/.config/powerbi-ai/connections.env` (mode 600), and each launcher reads its
+own profile at start-up and hands it to the local MCP server through that
+process's environment, never through command-line arguments or an agent config.
+
+Everything an agent reads, though, becomes conversation content sent to its
+model provider (Anthropic for Claude, OpenAI for Codex). The credentials would
+leak that way only if an agent read the profile file, ran a command that printed
+it, or read an MCP server's environment. So setup installs a guard in Claude's
+**user** settings (`~/.claude/settings.json`, covering Claude started in any
+folder):
+
+| Layer | Covers | Mechanism |
+|---|---|---|
+| `permissions.deny` | Claude's file tools (Read, Grep, Glob, Edit) | `Read`/`Edit(~/.config/powerbi-ai/**)`, `Read(~/**/*connections.env)`, `Read(//proc/*/environ)` |
+| `powerbi-secret-guard` | Claude's Bash tool | `PreToolUse` hook that refuses commands naming the credential directory or a `connections.env` file, `powerbi-env get`/`psql-url`, `/proc/*/environ`, `ps e`, or a bare `env`/`printenv`/`export -p` |
+| `AGENTS.md` / `CLAUDE.md` | both agents | an explicit rule never to read or print credentials, and to use `doctor.sh --live` to test connections |
+
+Deny rules reach shell commands only when Claude's Bash sandbox is enabled
+(it needs `bubblewrap` and `socat`, and confines every command's network and
+writes), which is why Bash has its own hook. The hook matches command text, so
+it stops accidental and routine reads but not a command that builds the path
+indirectly; it also refuses harmless commands that merely mention these names,
+so search code for them with Claude's Grep tool instead of `grep`. Codex has no
+equivalent per-file control, so for Codex the `AGENTS.md` rule is the only
+layer. `doctor.sh` checks that the guard is installed and refuses a sample
+credential read.
+
+What no configuration here can prevent:
+
+- **Query results.** Rows returned by a database MCP are sent to the provider.
+- **The network path.** `MSSQL_<NAME>_ENCRYPT='disable'` sends the SQL Server
+  password merely obfuscated, and a PostgreSQL URL without `sslmode` may connect
+  without TLS. Prefer `true`/`strict` and `sslmode=verify-full` wherever the
+  servers support TLS.
+- **The MCP packages.** MCP Toolbox and `postgres-mcp` hold the credentials in
+  memory and follow their latest releases.
+
+Least-privilege, read-only database logins therefore remain the real boundary.
+
+### Practices
 
 - Never put connection URIs, passwords, PATs or tokens in `.codex/config.toml`,
   `.mcp.json`, Claude settings or any repository. Run

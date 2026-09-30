@@ -277,6 +277,40 @@ if (!disabled.has("plugin:powerbi-authoring:powerbi-modeling-mcp")) {
   write(claudeStateFile, jsonText(claudeState), 0o600);
 }
 
+// Keep database credentials out of Claude's context, since everything Claude
+// reads is sent to the model provider. User scope, because the credentials
+// are machine-wide and Claude may be started in any directory. The deny rules
+// cover Claude's file tools (Read, Grep, Glob, Edit); Bash is covered by the
+// powerbi-secret-guard PreToolUse hook, because deny rules reach shell
+// commands only when Claude's Bash sandbox is enabled.
+const guardCommand = path.join(binDir, "powerbi-secret-guard");
+const credentialDenyRules = [
+  "Read(~/.config/powerbi-ai/**)",
+  "Edit(~/.config/powerbi-ai/**)",
+  "Read(~/**/*connections.env)",
+  "Read(//proc/*/environ)",
+];
+const userSettingsFile = path.join(
+  process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"),
+  "settings.json",
+);
+const userSettings = fs.existsSync(userSettingsFile) ? parseJson(userSettingsFile) : {};
+userSettings.permissions ||= {};
+userSettings.permissions.deny = [
+  ...new Set([...(userSettings.permissions.deny || []), ...credentialDenyRules]),
+];
+userSettings.hooks ||= {};
+const isGuard = (entry) =>
+  (entry.hooks || []).some((hook) => String(hook.command || "").includes("powerbi-secret-guard"));
+userSettings.hooks.PreToolUse = [
+  ...(userSettings.hooks.PreToolUse || []).filter((entry) => !isGuard(entry)),
+  { matcher: "Bash", hooks: [{ type: "command", command: guardCommand, timeout: 10 }] },
+];
+const userSettingsMode = fs.existsSync(userSettingsFile)
+  ? fs.statSync(userSettingsFile).mode & 0o777
+  : 0o644;
+write(userSettingsFile, jsonText(userSettings), userSettingsMode);
+
 for (const file of ["AGENTS.md", "CLAUDE.md"]) {
   const target = path.join(workspace, file);
   const template = path.join(setupRoot, "templates", file);

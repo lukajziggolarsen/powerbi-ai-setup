@@ -210,6 +210,25 @@ if [[ -r "$claude_mcp" ]] && grep -Fq '"powerbi-modeling"' "$claude_mcp"; then
   pass "Claude project modeling server configured"
 fi
 
+# The credential guard: deny rules for Claude's file tools plus the Bash hook,
+# in user settings. The self-test feeds the hook a command that reads the
+# profile file (nothing is executed) and expects a refusal.
+user_settings="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+if [[ -r "$user_settings" ]] && node -e '
+    const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const deny = s.permissions?.deny || [];
+    const hooked = (s.hooks?.PreToolUse || []).some((e) => (e.hooks || []).some((h) => String(h.command || "").includes("powerbi-secret-guard")));
+    process.exit(deny.includes("Read(~/.config/powerbi-ai/**)") && hooked ? 0 : 1)' "$user_settings" 2>/dev/null; then
+  if has powerbi-secret-guard && printf '%s' '{"tool_name":"Bash","tool_input":{"command":"cat ~/.config/powerbi-ai/connections.env"}}' |
+      powerbi-secret-guard | grep -q '"deny"'; then
+    pass "Claude credential guard active (file-tool deny rules and Bash hook)"
+  else
+    fail "Claude credential guard is configured but powerbi-secret-guard does not refuse credential reads; rerun setup.sh"
+  fi
+else
+  fail "Claude credential guard is missing from $user_settings; rerun setup.sh"
+fi
+
 secret_files=("$codex_config" "$claude_mcp" "$claude_settings" "$workspace/.claude/settings.local.json")
 if node "$setup_root/scripts/secret-audit.mjs" "${secret_files[@]}" >/dev/null; then
   pass "no credential-like literals in agent project configs"
