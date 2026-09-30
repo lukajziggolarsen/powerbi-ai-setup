@@ -198,12 +198,22 @@ for file in "$codex_config" "$claude_mcp" "$claude_settings"; do
   if [[ -r "$file" ]]; then pass "project config exists: $relative"; else fail "missing project config: $relative"; fi
 done
 
-if [[ -r "$codex_config" ]]; then
-  if grep -Fq '[mcp_servers.powerbi-modeling]' "$codex_config" &&
-     grep -Fq '[plugins."powerbi-authoring@fabric-collection".mcp_servers.powerbi-modeling-mcp]' "$codex_config"; then
-    pass "Codex routes modeling through one standalone server"
+# Ask Codex what it actually loads in the workspace: it ignores the workspace
+# config in an untrusted folder and then runs only the plugin's WSL-side
+# modeling server, while the file itself still looks correct.
+if has codex && [[ -r "$claude_mcp" ]]; then
+  codex_mcp=$( (cd "$workspace" && codex mcp list --json 2>/dev/null) || true)
+  mapfile -t expected_servers < <(node "$setup_root/scripts/mcp-servers.mjs" "$claude_mcp" 2>/dev/null | cut -f1)
+  if codex_state=$(node -e '
+      const list = JSON.parse(process.argv[1] || "[]");
+      const on = new Set(list.filter((m) => m.enabled).map((m) => m.name));
+      const problems = process.argv.slice(2).filter((name) => !on.has(name)).map((name) => `${name} not loaded`);
+      if (on.has("powerbi-modeling-mcp")) problems.push("the WSL-side plugin server powerbi-modeling-mcp is enabled");
+      if (problems.length) { process.stdout.write(problems.join(", ")); process.exit(1); }' \
+      "$codex_mcp" "${expected_servers[@]}" 2>/dev/null); then
+    pass "Codex loads the workspace MCP servers (${#expected_servers[@]}) and not the plugin's duplicate"
   else
-    warn "Codex single-modeling-server policy is not evident"
+    fail "Codex in $workspace: ${codex_state:-cannot list MCP servers}; the folder is probably untrusted: rerun setup.sh, or answer yes when codex asks to trust it"
   fi
 fi
 if [[ -r "$claude_mcp" ]] && grep -Fq '"powerbi-modeling"' "$claude_mcp"; then

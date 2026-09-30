@@ -24,6 +24,7 @@ skip_agent_clis=0
 skip_plugins=0
 skip_npm_packages=0
 skip_mcp_warmup=0
+codex_trust=1
 install_windows_node=1
 
 usage() {
@@ -40,6 +41,8 @@ Options:
   --skip-plugins           Do not register marketplaces or install plugins.
   --skip-npm-packages      Do not install or update the Power BI report/Desktop CLIs.
   --skip-mcp-warmup        Do not start each MCP server once to install its latest package.
+  --no-codex-trust         Do not mark the workspace as trusted for Codex (Codex then
+                           ignores its MCP config until you accept Codex's trust prompt).
   --no-windows-node-install
                            In WSL, only check for Windows npx; do not use winget.
   -h, --help               Show this help.
@@ -57,6 +60,7 @@ while (($#)); do
     --skip-plugins) skip_plugins=1; shift ;;
     --skip-npm-packages) skip_npm_packages=1; shift ;;
     --skip-mcp-warmup) skip_mcp_warmup=1; shift ;;
+    --no-codex-trust) codex_trust=0; shift ;;
     --no-windows-node-install) install_windows_node=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -438,6 +442,7 @@ configure_args=(
 )
 if [[ -n "$env_file" ]]; then configure_args+=(--env-file "$env_file"); fi
 if ((dry_run)); then configure_args+=(--dry-run); fi
+if ((!codex_trust)); then configure_args+=(--no-codex-trust); fi
 node "${configure_args[@]}"
 
 # The launchers resolve the latest package on every start. Start each server

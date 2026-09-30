@@ -93,7 +93,8 @@ install, because the rest of the preview needs Node.js.
    directory), Codex globally.
 9. Runs `scripts/configure.mjs` to write the workspace configs and the Claude
    credential guard (see [Security](#security)). It disables the plugin's
-   duplicate modeling server, backs up every file it changes under
+   duplicate modeling server, marks the workspace as trusted for Codex (see
+   below), backs up every file it changes under
    `~/.local/state/powerbi-ai-setup/backups/`, and never overwrites an existing
    `AGENTS.md` or `CLAUDE.md`.
 10. Starts every configured MCP server once through its launcher. That installs
@@ -102,6 +103,26 @@ install, because the rest of the preview needs Node.js.
     warning, since a database may simply be unreachable at the moment.
 
 Every step is idempotent: rerunning changes nothing that is already right.
+
+### Codex folder trust
+
+Codex applies a workspace's `.codex/config.toml` only in a folder you have
+trusted. That file carries the Windows `powerbi-modeling` server, the database
+MCPs, and the switch that turns off the plugin's own WSL-side modeling server.
+Untrusted, Codex silently runs only that plugin server, which cannot see Power
+BI Desktop. So setup records the same entry Codex's first-run prompt would, in
+`~/.codex/config.toml`:
+
+```toml
+[projects."/home/<you>/powerbi"]
+trust_level = "trusted"
+```
+
+Trust also covers every folder below the workspace, so a `.codex/config.toml`
+inside one of your project repositories there would be applied as well. Use
+`--no-codex-trust` to decide in Codex's own prompt instead. Either way,
+`doctor.sh` asks Codex (`codex mcp list`) what it really loads in the workspace
+and fails if the workspace servers are missing or the plugin's duplicate is on.
 
 ### What stays at "latest"
 
@@ -132,6 +153,7 @@ in `versions.env`.
 | `--skip-agent-clis` | Do not install or update the Codex or Claude CLIs. |
 | `--skip-npm-packages` | Do not install or update the Power BI CLIs. |
 | `--skip-mcp-warmup` | Do not start each MCP server once after configuring (for offline runs). |
+| `--no-codex-trust` | Do not mark the workspace as trusted for Codex; accept Codex's trust prompt yourself instead. |
 | `--skip-plugins` | Do not touch marketplaces or plugins. |
 | `--no-windows-node-install` | Only check for Windows `npx.cmd`; never run `winget`. |
 
@@ -231,6 +253,7 @@ marketplace. Uninstall that one first (`codex plugin remove <id>`,
 | PostgreSQL MCP: `Failed to build pglast` | `postgres-mcp` ran on a Python without `pglast` wheels. Keep `PSQL_MCP_PYTHON` at a version with wheels (3.12 or 3.13). |
 | SQL Server MCP: `TLS Handshake failed: cannot read handshake packet: EOF` | Set `MSSQL_<NAME>_ENCRYPT='disable'` for that server. |
 | Claude says `Blocked by powerbi-secret-guard` | Working as intended: the command named the credentials or an environment dump. Test connections with `doctor.sh --live`, search code with Claude's Grep tool, and open the profile file yourself if you need to edit it. |
+| Codex has no `powerbi-modeling` or database MCPs, only the plugin's `powerbi-modeling-mcp` (which cannot see Desktop); doctor reports "Codex in … not loaded" | The workspace is not trusted for Codex, so Codex ignores `.codex/config.toml`. Rerun `setup.sh` without `--no-codex-trust`, or answer yes when `codex` asks to trust the folder. |
 | Claude plugins read "not enabled" | Run `claude` and `doctor.sh` from, or with, the same `--workspace` that setup used. |
 
 ## Repository layout

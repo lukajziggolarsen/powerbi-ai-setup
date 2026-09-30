@@ -16,6 +16,10 @@ function parseArgs(argv) {
       out.dryRun = true;
       continue;
     }
+    if (key === "no-codex-trust") {
+      out.noCodexTrust = true;
+      continue;
+    }
     const value = argv[++i];
     if (!value) throw new Error(`Missing value for ${arg}`);
     out[key] = value;
@@ -220,6 +224,32 @@ for (const item of sources.mssql || []) {
   });
 }
 write(codexFile, codex, 0o600);
+
+// Codex applies a workspace's .codex/config.toml (the MCP servers, and the
+// switch that turns off the plugin's WSL-side modeling server) only in a
+// trusted folder. Untrusted, it silently runs the plugin's server, which cannot
+// see Power BI Desktop, and no database MCPs. Record the same trust entry that
+// Codex's own first-run prompt writes. Trust also covers folders below the
+// workspace, including their own .codex/config.toml files.
+if (args.noCodexTrust) {
+  console.log(`not trusting ${workspace} for Codex (--no-codex-trust); answer yes when codex asks`);
+} else {
+  const codexUserFile = path.join(
+    process.env.CODEX_HOME || path.join(os.homedir(), ".codex"),
+    "config.toml",
+  );
+  const codexUserBefore = readOr(codexUserFile, "");
+  const codexUser = upsertTomlSection(codexUserBefore, `projects.${tomlString(workspace)}`, {
+    trust_level: tomlString("trusted"),
+  });
+  const codexUserMode = fs.existsSync(codexUserFile)
+    ? fs.statSync(codexUserFile).mode & 0o777
+    : 0o600;
+  if (codexUser !== codexUserBefore) {
+    console.log(`${dryRun ? "would trust" : "trusting"} ${workspace} (and folders below it) for Codex`);
+  }
+  write(codexUserFile, codexUser, codexUserMode);
+}
 
 const claudeSettingsFile = path.join(workspace, ".claude", "settings.json");
 const claudeSettings = fs.existsSync(claudeSettingsFile) ? parseJson(claudeSettingsFile) : {};
