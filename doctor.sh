@@ -256,13 +256,7 @@ if ((live)); then
       else
         fail "MCP $server did not start: ${probe_error:0:400}"
       fi
-    done < <(node -e '
-      const servers = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).mcpServers || {};
-      for (const [name, server] of Object.entries(servers)) {
-        const command = typeof server.command === "string" ? server.command : "";
-        if (!/powerbi-(modeling|psql|mssql)-mcp$/.test(command)) continue;
-        process.stdout.write(`${name}\t${command}\t${(server.args || [])[0] || ""}\n`);
-      }' "$claude_mcp")
+    done < <(node "$setup_root/scripts/mcp-servers.mjs" "$claude_mcp")
   fi
 fi
 

@@ -23,6 +23,7 @@ dry_run=0
 skip_agent_clis=0
 skip_plugins=0
 skip_npm_packages=0
+skip_mcp_warmup=0
 install_windows_node=1
 
 usage() {
@@ -35,9 +36,10 @@ Options:
   --env-file FILE          Optional database profile/credential .env file.
   --bin-dir PATH           Launcher install directory (default: ~/.local/bin).
   --dry-run                Show changes without writing or installing.
-  --skip-agent-clis        Do not install missing Codex/Claude CLIs.
+  --skip-agent-clis        Do not install or update the Codex/Claude CLIs.
   --skip-plugins           Do not register marketplaces or install plugins.
-  --skip-npm-packages      Do not install the Power BI report/Desktop CLIs.
+  --skip-npm-packages      Do not install or update the Power BI report/Desktop CLIs.
+  --skip-mcp-warmup        Do not start each MCP server once to install its latest package.
   --no-windows-node-install
                            In WSL, only check for Windows npx; do not use winget.
   -h, --help               Show this help.
@@ -54,6 +56,7 @@ while (($#)); do
     --skip-agent-clis) skip_agent_clis=1; shift ;;
     --skip-plugins) skip_plugins=1; shift ;;
     --skip-npm-packages) skip_npm_packages=1; shift ;;
+    --skip-mcp-warmup) skip_mcp_warmup=1; shift ;;
     --no-windows-node-install) install_windows_node=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -211,9 +214,30 @@ if [[ ! -w "$npm_prefix" || "$npm_prefix" == "$HOME/.local/share/powerbi-ai/"* ]
   run npm config set prefix "$HOME/.local" --location=user
 fi
 
+# Install a missing agent CLI with npm; update an existing one the way it was
+# installed: through npm when npm owns it, otherwise with its own updater
+# (Codex's standalone installer, Claude's native installer).
+install_or_update_agent_cli() {
+  local command_name=$1 package=$2 latest current resolved
+  if ! has "$command_name"; then
+    run npm install -g "$package@latest"
+    return
+  fi
+  # Both CLIs publish every release to npm, so npm's version says whether an
+  # update is due; the updaters would otherwise reinstall on every run.
+  latest=$(npm view "$package" version 2>/dev/null || true)
+  current=$("$command_name" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
+  if [[ -n "$latest" && "$latest" == "$current" ]]; then return; fi
+  resolved=$(readlink -f "$(command -v "$command_name")")
+  if [[ "$resolved" == "$(npm root -g)/"* ]]; then
+    run npm install -g "$package@latest"
+  else
+    run "$command_name" update
+  fi
+}
 if ((!skip_agent_clis)); then
-  if ! has codex; then run npm install -g @openai/codex@latest; fi
-  if ! has claude; then run npm install -g @anthropic-ai/claude-code@latest; fi
+  install_or_update_agent_cli codex @openai/codex
+  install_or_update_agent_cli claude @anthropic-ai/claude-code
 fi
 if ((!dry_run)) && { ! has codex || ! has claude; }; then
   echo "Both codex and claude must be on PATH unless --skip-plugins is used." >&2
@@ -229,7 +253,18 @@ fi
 if [[ -n "$env_file" ]]; then
   node "$setup_root/bin/powerbi-env" validate "$env_file"
   psql_connections=$(node "$setup_root/bin/powerbi-env" count "$env_file" psql)
-  if ((psql_connections > 0)) && ! has uvx; then install_uv; fi
+  if ((psql_connections > 0)); then
+    if ! has uvx; then
+      install_uv
+    elif [[ "$UV_VERSION" == "latest" && "$(readlink -f "$(command -v uv)")" == "$local_bin/uv" ]]; then
+      # The release tarball has no installer receipt, so "uv self update"
+      # refuses; compare with the latest tag and reinstall when behind.
+      uv_latest=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+        https://github.com/astral-sh/uv/releases/latest | sed 's#.*/tag/##')
+      uv_current=$(uv --version | awk '{print $2}')
+      if [[ -n "$uv_latest" && "$uv_latest" != "$uv_current" ]]; then install_uv; fi
+    fi
+  fi
 fi
 
 # powershell.exe inherits the PATH Windows had when WSL started, so a Node.js
@@ -288,14 +323,6 @@ fi
 codex_config="${CODEX_HOME:-$HOME/.codex}/config.toml"
 codex_config_has() { grep -Fqs "$1" "$codex_config"; }
 
-codex_plugin_installed() {
-  local plugin_id=$1
-  codex plugin list --json 2>/dev/null | node -e '
-    let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
-      const x=JSON.parse(s || "{}"); process.exit(x.installed?.some(p=>p.pluginId===process.argv[1])?0:1)
-    })' "$plugin_id"
-}
-
 codex_engineering_collision() {
   codex plugin list --json 2>/dev/null | node -e '
     let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{
@@ -347,9 +374,9 @@ if ((!skip_plugins)); then
     run codex plugin marketplace add microsoft/skills-for-fabric
   fi
 
-  if ! codex_plugin_installed powerbi-authoring@fabric-collection; then
-    run codex plugin add powerbi-authoring@fabric-collection
-  fi
+  # Re-adding copies the plugin from the just-upgraded snapshot, which is how an
+  # installed Codex plugin moves to the marketplace's latest version.
+  run codex plugin add powerbi-authoring@fabric-collection
   if codex_engineering_collision; then
     echo "A different Codex powerbi-engineering plugin is already installed." >&2
     echo "Remove or disable it before installing $engineering_id." >&2
@@ -412,6 +439,25 @@ configure_args=(
 if [[ -n "$env_file" ]]; then configure_args+=(--env-file "$env_file"); fi
 if ((dry_run)); then configure_args+=(--dry-run); fi
 node "${configure_args[@]}"
+
+# The launchers resolve the latest package on every start. Start each server
+# once now so that download happens here, not inside an agent's MCP startup
+# timeout, and so a broken server shows up before the first session.
+if ((!dry_run && !skip_mcp_warmup)) && [[ -r "$workspace/.mcp.json" ]]; then
+  while IFS=$'\t' read -r server launcher profile; do
+    [[ -n "$server" ]] || continue
+    timeout_ms=120000
+    if [[ "$launcher" == *powerbi-modeling-mcp ]]; then timeout_ms=300000; fi
+    echo "starting MCP $server once to install its latest package"
+    if probe_error=$(POWERBI_AI_MCP_PROBE_TIMEOUT_MS=$timeout_ms \
+        node "$setup_root/scripts/mcp-probe.mjs" "$launcher" ${profile:+"$profile"} 2>&1 >/dev/null); then
+      echo "MCP $server started"
+    else
+      echo "warning: MCP $server did not start: ${probe_error:0:300}" >&2
+      echo "         rerun doctor.sh --live once the cause is fixed." >&2
+    fi
+  done < <(node "$setup_root/scripts/mcp-servers.mjs" "$workspace/.mcp.json")
+fi
 
 echo
 echo "Power BI AI setup complete for: $workspace"

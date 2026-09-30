@@ -73,26 +73,53 @@ install, because the rest of the preview needs Node.js.
    points npm's global prefix at `~/.local` when the current one is not
    writable. Windows' `npm`/`npx`/`claude` shims on the appended Windows `PATH`
    are never mistaken for the Linux tools.
-3. Installs any missing Codex and Claude Code CLIs, and the latest Power BI
-   `powerbi-report-author` and `powerbi-desktop` CLIs.
-4. Validates the database profile file, if there is one, and installs `uv`
-   when a PostgreSQL profile needs it.
+3. Installs the Codex and Claude Code CLIs, or updates them the way they were
+   installed (npm, or their own `update` command for standalone installs), and
+   installs the latest Power BI `powerbi-report-author` and `powerbi-desktop`
+   CLIs.
+4. Validates the database profile file, if there is one, and installs or
+   updates `uv` when a PostgreSQL profile needs it.
 5. Checks that Windows interop works and that Windows `npx.cmd` exists
    (installing Windows Node.js LTS with `winget` if not).
 6. Installs the MCP launchers into `~/.local/bin` and their config into
    `~/.config/powerbi-ai/`.
-7. Registers Microsoft's `fabric-collection` marketplace and this checkout as the
-   local `powerbi-ai-setup` marketplace with both agents, removing a registration
+7. Registers Microsoft's `fabric-collection` marketplace (updating it to the
+   upstream HEAD when it is already registered) and this checkout as the local
+   `powerbi-ai-setup` marketplace with both agents, removing a registration
    under the old `powerbi-ai-blueprint` name or one pointing at a moved checkout.
-8. Installs both plugins: Claude at project scope for `--workspace` (every
-   `claude plugin` call runs inside the workspace, because Claude resolves the
-   project from the working directory), Codex globally.
+8. Installs or updates both plugins to the marketplaces' current versions:
+   Claude at project scope for `--workspace` (every `claude plugin` call runs
+   inside the workspace, because Claude resolves the project from the working
+   directory), Codex globally.
 9. Runs `scripts/configure.mjs` to write the workspace configs. It disables the
    plugin's duplicate modeling server, backs up every file it changes under
    `~/.local/state/powerbi-ai-setup/backups/`, and never overwrites an existing
    `AGENTS.md` or `CLAUDE.md`.
+10. Starts every configured MCP server once through its launcher. That installs
+    the latest server package now, rather than inside an agent's MCP startup
+    timeout, and reports a server that cannot start. A failure here is a
+    warning, since a database may simply be unreachable at the moment.
 
 Every step is idempotent: rerunning changes nothing that is already right.
+
+### What stays at "latest"
+
+Everything this repository does not maintain itself follows its upstream
+latest release, and every rerun of `setup.sh` brings it up to date:
+
+| Component | How it tracks latest |
+|---|---|
+| Codex and Claude Code CLIs | installed or updated on every run |
+| `powerbi-report-author`, `powerbi-desktop` | `npm install -g …@latest` on every run |
+| `powerbi-authoring` plugin and its skills | marketplace refreshed to upstream HEAD, plugin updated in both agents |
+| Power BI modeling MCP, MCP Toolbox | launcher runs `npx …@latest` on each start; setup's warm-up installs it |
+| `postgres-mcp` | launcher runs `uvx --upgrade-package postgres-mcp` on each start |
+| `uv` | reinstalled from the latest release when behind |
+
+Only the `powerbi-engineering` plugin (this repository) is versioned by hand,
+and Node.js is installed once and left alone while it satisfies the minimum.
+To hold an upstream component back temporarily, replace `latest` with a version
+in `versions.env`.
 
 | Option | Effect |
 |---|---|
@@ -101,8 +128,9 @@ Every step is idempotent: rerunning changes nothing that is already right.
 | `--claude-scope SCOPE` | `project` (default), `local` or `user` for the Claude plugins. |
 | `--bin-dir PATH` | Launcher directory (default `~/.local/bin`). |
 | `--dry-run` | Print what would change. |
-| `--skip-agent-clis` | Do not install missing Codex or Claude CLIs. |
-| `--skip-npm-packages` | Do not install or upgrade the Power BI CLIs. |
+| `--skip-agent-clis` | Do not install or update the Codex or Claude CLIs. |
+| `--skip-npm-packages` | Do not install or update the Power BI CLIs. |
+| `--skip-mcp-warmup` | Do not start each MCP server once after configuring (for offline runs). |
 | `--skip-plugins` | Do not touch marketplaces or plugins. |
 | `--no-windows-node-install` | Only check for Windows `npx.cmd`; never run `winget`. |
 
@@ -166,9 +194,9 @@ access.
 
 ## Updating
 
-- **Toolchain.** Rerun `setup.sh --workspace ~/powerbi`. Online components
-  follow their `latest` releases; to isolate an upstream regression, temporarily
-  replace `latest` in `versions.env` with an exact version.
+- **Toolchain.** Rerun `setup.sh --workspace ~/powerbi`; it updates everything
+  in the table above. To isolate an upstream regression, temporarily replace
+  `latest` in `versions.env` with an exact version.
 - **The vendored `powerbi-engineering` plugin.** Edit it under `plugins/`, then
   bump `version` in both `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`
   and rerun setup. Claude caches plugins by version and ignores same-version
@@ -211,7 +239,8 @@ versions.env               upstream version channels (installed to ~/.config/pow
 bin/                       MCP launchers and the env-file reader (installed to ~/.local/bin)
 config/                    database profile example and the SQL Server Toolbox config
 scripts/configure.mjs      writes the workspace and agent configs
-scripts/mcp-probe.mjs      MCP initialize handshake used by doctor --live
+scripts/mcp-probe.mjs      MCP initialize handshake (setup warm-up, doctor --live)
+scripts/mcp-servers.mjs    lists the managed MCP servers in a workspace .mcp.json
 scripts/secret-audit.mjs   credential-literal scanner used by doctor
 templates/                 AGENTS.md and CLAUDE.md for new workspaces
 plugins/powerbi-engineering/   the vendored Claude/Codex plugin
